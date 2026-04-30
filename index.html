@@ -1662,24 +1662,23 @@ const App = {
     async modalLink(memberId) {
         const m = this.members.find(x => x.id === memberId);
         if (!m) return;
-        // Fetch fresco degli utenti ogni volta
         try {
             const snap = await db.ref('users').once('value');
             this.users = [];
             snap.forEach(c => this.users.push({ uid: c.key, ...c.val() }));
-        } catch(e) { console.error(e); }
-
+        } catch(e) {
+            alert('❌ Errore lettura utenti: ' + e.message + '\n\nControlla le regole del Realtime Database in Firebase Console.');
+            return;
+        }
         const available = this.users
             .filter(u => !this.members.some(mem => mem.userId === u.uid))
             .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'it'));
-
         modal(`🔗 Collega: ${escapeHtml(m.name)}`, `
             <div class="alert alert-info">
-                Utenti nel database: <strong>${this.users.length}</strong> &nbsp;|&nbsp;
-                Account liberi: <strong>${available.length}</strong>
+                Utenti nel DB: <strong>${this.users.length}</strong> &nbsp;|&nbsp; Account liberi: <strong>${available.length}</strong>
             </div>
             ${available.length === 0
-                ? '<div class="alert alert-warn">Tutti gli account del database sono già collegati a un vigile.</div>'
+                ? '<div class="alert alert-warn">Tutti gli account nel database sono già collegati a un vigile.</div>'
                 : `<div class="form-group">
                     <label>Seleziona account (${available.length} disponibili)</label>
                     <select id="link-uid">
@@ -1924,38 +1923,42 @@ const App = {
     _adminTab: 'ruoli',
     page_admin() {
         if (!Auth.isSuperAdmin()) return '<p>Accesso negato</p>';
-        // Ricarica sempre tutti gli utenti da Firebase prima di mostrare il pannello
-        db.ref('users').once('value', snap => {
-            this.users = [];
-            snap.forEach(c => this.users.push({ uid: c.key, ...c.val() }));
-            const el = document.getElementById('admin-dyn');
-            if (el) el.innerHTML = this._adminTab === 'ruoli' ? this._adminRuoli() : this._adminMigrazione();
-        });
         return `
             <div class="flex mb-2">
                 <button class="btn ${this._adminTab==='ruoli'?'btn-red':'btn-gray'}" style="flex:1" onclick="App.setAdminTab('ruoli')">👑 Ruoli</button>
                 <button class="btn ${this._adminTab==='migrazione'?'btn-red':'btn-gray'}" style="flex:1" onclick="App.setAdminTab('migrazione')">🔄 Migrazione</button>
             </div>
-            <div id="admin-dyn">
-                <p class="text-center text-gray" style="padding:2rem">⏳ Caricamento utenti...</p>
-            </div>`;
+            <div class="alert alert-info text-sm" style="margin-bottom:0.75rem;display:flex;align-items:center;justify-content:space-between">
+                <span>Utenti nel DB: <strong>${this.users.length}</strong></span>
+                <button class="btn btn-gray btn-sm" onclick="App.refreshAdminUsers()">🔄 Ricarica lista</button>
+            </div>
+            ${this._adminTab === 'ruoli' ? this._adminRuoli() : this._adminMigrazione()}`;
     },
 
     setAdminTab(tab) {
         this._adminTab = tab;
-        // Aggiorna bottoni
-        const wrap = document.querySelector('#content .flex.mb-2');
-        if (wrap) wrap.innerHTML = `
-            <button class="btn ${tab==='ruoli'?'btn-red':'btn-gray'}" style="flex:1" onclick="App.setAdminTab('ruoli')">👑 Ruoli</button>
-            <button class="btn ${tab==='migrazione'?'btn-red':'btn-gray'}" style="flex:1" onclick="App.setAdminTab('migrazione')">🔄 Migrazione</button>`;
-        // Ricarica sempre utenti freschi dal DB
-        db.ref('users').once('value', snap => {
-            this.users = [];
-            snap.forEach(c => this.users.push({ uid: c.key, ...c.val() }));
-            const el = document.getElementById('admin-dyn');
-            if (el) el.innerHTML = tab === 'ruoli' ? this._adminRuoli() : this._adminMigrazione();
-        });
+        this.renderContent();
     },
+
+    refreshAdminUsers() {
+        const el = document.getElementById('content');
+        if (el) el.innerHTML = '<p class="text-center text-gray" style="padding:2rem">⏳ Ricaricamento utenti...</p>';
+        db.ref('users').once('value')
+            .then(snap => {
+                this.users = [];
+                snap.forEach(c => this.users.push({ uid: c.key, ...c.val() }));
+                this.renderContent();
+            })
+            .catch(err => {
+                if (el) el.innerHTML = `
+                    <div class="alert alert-danger">
+                        ❌ <strong>Errore lettura /users</strong><br>
+                        ${escapeHtml(err.message)}<br><br>
+                        Vai su Firebase Console → Realtime Database → Regole e controlla i permessi di lettura.
+                    </div>`;
+            });
+    },
+
     _adminRuoli() {
         const admins = this.users.filter(u => u.role === 'admin');
         const regulars = this.users.filter(u => u.role === 'user');
