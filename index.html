@@ -203,7 +203,8 @@
                 <input type="password" id="login-pass" placeholder="••••••" autocomplete="current-password">
             </div>
             <button class="login-btn primary" onclick="Auth.login()">Accedi</button>
-            <div class="login-toggle">Non hai un account? <a onclick="Auth.toggleView('register')">Registrati</a></div>
+            <div class="login-toggle" style="margin-bottom:0.3rem">Non hai un account? <a onclick="Auth.toggleView('register')">Registrati</a></div>
+            <div class="login-toggle"><a onclick="Auth.resetPassword()" style="color:#6b7280">Password dimenticata?</a></div>
         </div>
 
         <div id="register-view" class="hidden">
@@ -231,6 +232,39 @@
             </div>
             <button class="login-btn primary" onclick="Auth.register()">Registrati</button>
             <div class="login-toggle">Hai già un account? <a onclick="Auth.toggleView('login')">Accedi</a></div>
+        </div>
+
+        <!-- ======= REPAIR VIEW (account orfano) ======= -->
+        <div id="repair-view" class="hidden">
+            <div id="repair-error" class="login-error hidden"></div>
+            <div class="login-error" style="display:block;background:#fef3c7;color:#78350f;margin-bottom:1rem;">
+                ⚠️ Il tuo account Firebase esiste ma il profilo interno è mancante.<br>
+                Reinserisci i tuoi dati per ripristinarlo.
+            </div>
+            <div class="form-group">
+                <label>Email rilevata</label>
+                <input type="email" id="repair-email-info" disabled
+                       style="background:#f3f4f6;color:#6b7280;">
+            </div>
+            <div class="form-group">
+                <label>Password attuale</label>
+                <input type="password" id="repair-pass" placeholder="••••••">
+            </div>
+            <div class="form-group">
+                <label>Il tuo nome e cognome</label>
+                <input type="text" id="repair-name" placeholder="Mario Rossi">
+            </div>
+            <div class="form-group">
+                <label>Il tuo turno</label>
+                <div class="shift-picker" id="repair-shift">
+                    <div class="shift-opt" data-shift="A" onclick="Auth.pickRepairShift('A')">A</div>
+                    <div class="shift-opt" data-shift="B" onclick="Auth.pickRepairShift('B')">B</div>
+                    <div class="shift-opt" data-shift="C" onclick="Auth.pickRepairShift('C')">C</div>
+                    <div class="shift-opt" data-shift="D" onclick="Auth.pickRepairShift('D')">D</div>
+                </div>
+            </div>
+            <button class="login-btn primary" onclick="Auth.repairAccount()">Ripristina Account</button>
+            <div class="login-toggle"><a onclick="Auth.toggleView('login')">← Torna al login</a></div>
         </div>
     </div>
 </div>
@@ -314,8 +348,11 @@ const Auth = {
     toggleView(view) {
         document.getElementById('login-view').classList.toggle('hidden', view !== 'login');
         document.getElementById('register-view').classList.toggle('hidden', view !== 'register');
+        document.getElementById('repair-view').classList.toggle('hidden', view !== 'repair');
         document.getElementById('login-error').classList.add('hidden');
         document.getElementById('reg-error').classList.add('hidden');
+        const repairErr = document.getElementById('repair-error');
+        if (repairErr) repairErr.classList.add('hidden');
     },
 
     pickShift(s) {
@@ -351,22 +388,68 @@ const Auth = {
         if (!this._pickedShift) return this.showError('reg-error', 'Seleziona il tuo turno');
 
         const isSuper = email.toLowerCase() === SUPER_ADMIN_EMAIL;
+
+        // Step 1: crea utente Firebase Auth
+        let cred;
         try {
-            const cred = await fbAuth.createUserWithEmailAndPassword(email, pass);
+            cred = await fbAuth.createUserWithEmailAndPassword(email, pass);
+        } catch(e) {
+            return this.showError('reg-error',
+                e.code === 'auth/email-already-in-use'
+                    ? 'Email già registrata. Usa "Accedi" oppure scegli un'altra email.'
+                    : 'Errore registrazione: ' + e.message);
+        }
+
+        // Step 2: salva profilo nel database (separato per poter fare rollback)
+        try {
             const role = isSuper ? 'super_admin' : 'user';
             await db.ref('users/' + cred.user.uid).set({
                 name, email, role, shift: this._pickedShift,
                 createdAt: new Date().toISOString()
             });
         } catch(e) {
-            this.showError('reg-error', e.code === 'auth/email-already-in-use' ? 'Email già registrata' : 'Errore: ' + e.message);
+            // Rollback: elimina l'account Firebase appena creato
+            try { await cred.user.delete(); } catch(_) {}
+            return this.showError('reg-error',
+                'Errore salvataggio profilo nel database: ' + e.message +
+                '. Riprova o controlla le regole del database Firebase.');
         }
     },
 
     async loadProfile(firebaseUser) {
         const snap = await db.ref('users/' + firebaseUser.uid).once('value');
-        const data = snap.val();
-        if (!data) { fbAuth.signOut(); return; }
+        let data = snap.val();
+
+        // ── ACCOUNT ORFANO: esiste in Firebase Auth ma non nel DB ──
+        if (!data) {
+            // Caso speciale: superadmin → auto-crea il record
+            if (firebaseUser.email.toLowerCase() === SUPER_ADMIN_EMAIL) {
+                const autoData = {
+                    name: 'Luca Laganà',
+                    email: firebaseUser.email,
+                    role: 'super_admin',
+                    shift: null,
+                    createdAt: new Date().toISOString(),
+                    autoCreated: true
+                };
+                try {
+                    await db.ref('users/' + firebaseUser.uid).set(autoData);
+                    data = autoData;
+                } catch(e) {
+                    fbAuth.signOut();
+                    document.getElementById('login-error').textContent =
+                        'Errore creazione profilo: ' + e.message;
+                    document.getElementById('login-error').classList.remove('hidden');
+                    return;
+                }
+            } else {
+                // Utente normale: mostra form di ripristino
+                fbAuth.signOut();
+                this._showRepairView(firebaseUser.email);
+                return;
+            }
+        }
+
         this.user = { uid: firebaseUser.uid, email: firebaseUser.email, ...data };
 
         document.getElementById('login-screen').classList.add('hidden');
@@ -383,7 +466,66 @@ const Auth = {
         App.init();
     },
 
+    // Mostra la view di ripristino per account orfani
+    _showRepairView(email) {
+        document.getElementById('login-view').classList.add('hidden');
+        document.getElementById('register-view').classList.add('hidden');
+        document.getElementById('repair-view').classList.remove('hidden');
+        document.getElementById('repair-email-info').textContent = email;
+        this._repairEmail = email;
+    },
+
+    async repairAccount() {
+        const name = document.getElementById('repair-name').value.trim();
+        const pass = document.getElementById('repair-pass').value;
+        if (!name || !pass) return this.showError('repair-error', 'Compila tutti i campi');
+        if (pass.length < 6) return this.showError('repair-error', 'Password minimo 6 caratteri');
+        if (!this._repairShift) return this.showError('repair-error', 'Seleziona il tuo turno');
+        try {
+            const cred = await fbAuth.signInWithEmailAndPassword(this._repairEmail, pass);
+            await db.ref('users/' + cred.user.uid).set({
+                name,
+                email: this._repairEmail,
+                role: 'user',
+                shift: this._repairShift,
+                createdAt: new Date().toISOString(),
+                repairedAt: new Date().toISOString()
+            });
+            // loadProfile verrà chiamato da onAuthStateChanged
+        } catch(e) {
+            this.showError('repair-error',
+                e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential'
+                    ? 'Password errata.'
+                    : 'Errore: ' + e.message);
+        }
+    },
+
+    pickRepairShift(s) {
+        this._repairShift = s;
+        document.querySelectorAll('#repair-shift .shift-opt').forEach(el =>
+            el.classList.toggle('selected', el.dataset.shift === s));
+    },
+
     logout() { fbAuth.signOut(); location.reload(); },
+
+    async resetPassword() {
+        const email = document.getElementById('login-email').value.trim();
+        if (!email) {
+            this.showError('login-error', 'Inserisci prima la tua email nel campo sopra.');
+            return;
+        }
+        try {
+            await fbAuth.sendPasswordResetEmail(email);
+            document.getElementById('login-error').style.background = '#d1fae5';
+            document.getElementById('login-error').style.color = '#065f46';
+            this.showError('login-error', '✅ Email di reset inviata a ' + email + '. Controlla la casella (anche spam).');
+        } catch(e) {
+            this.showError('login-error',
+                e.code === 'auth/user-not-found'
+                    ? 'Nessun account trovato con questa email.'
+                    : 'Errore: ' + e.message);
+        }
+    },
 
     isAdmin() { return this.user && (this.user.role === 'admin' || this.user.role === 'super_admin'); },
     isSuperAdmin() { return this.user && this.user.role === 'super_admin'; },
