@@ -705,9 +705,12 @@ const App = {
             : this.products.filter(p => !p.isCoffee || (sh && p.usedByShifts.includes(sh)));
 
         return `
-            <h2>🛒 Acquista</h2>
+            <div class="flex-between mb-2">
+                <h2 style="margin:0">🛒 Acquista</h2>
+                <button class="btn btn-orange btn-sm" onclick="App.modalOspite()">👤 Vendita Ospite</button>
+            </div>
             ${!sh ? '<div class="alert alert-warn">⚠️ Senza un turno assegnato non puoi acquistare il caffè. Gli altri prodotti restano disponibili.</div>' : ''}
-            <p class="text-sm text-gray mb-2">Tocca un prodotto per registrare l'acquisto. Il caffè si scala dal tuo turno (${sh||'—'}).</p>
+            <p class="text-sm text-gray mb-2">Tocca un prodotto per registrare l'acquisto. Il caffè si scala dal tuo turno (${sh||'—'}). Per chi è in sostituzione usa "Vendita Ospite".</p>
             ${visibleProducts.length === 0 ? '<p class="text-center text-gray" style="padding:2rem">Nessun prodotto disponibile</p>' : `
                 <div class="product-grid">
                     ${visibleProducts.map(p => this._renderUserProductCard(p)).join('')}
@@ -781,6 +784,140 @@ const App = {
 
         await this.save();
         alert(`✅ ${prod.name} acquistato${payNow ? ' (pagato)' : ' (a credito)'}!`);
+    },
+
+    // =====================================================
+    // VENDITA OSPITE — pagamento immediato, qualsiasi turno
+    // =====================================================
+    modalOspite() {
+        const myShift = Auth.myShift();
+        // Tutti i prodotti che possono essere venduti a un ospite (caffè di tutti i turni + altri)
+        if (this.products.length === 0) { alert('Nessun prodotto disponibile'); return; }
+
+        modal('👤 Vendita Ospite', `
+            <div class="alert alert-info">
+                <strong>Vendita a chi non è del turno fisso</strong> (sostituzioni, esterni, di passaggio).<br>
+                <span class="text-sm">Pagamento immediato, nessun credito. Va in cassa.</span>
+            </div>
+            <div class="form-group"><label>Prodotto</label>
+                <select id="osp-prod" onchange="App._ospiteOnProductChange()">
+                    <option value="">-- Scegli prodotto --</option>
+                    ${this.products.map(p => `<option value="${p.id}">${escapeHtml(p.name)} — €${p.price.toFixed(2)}${p.isCoffee?' ☕ '+p.usedByShifts.join('/'):''}</option>`).join('')}
+                </select>
+            </div>
+            <div id="osp-shift-wrap" class="hidden">
+                <div class="form-group">
+                    <label>Turno da cui scalare il caffè</label>
+                    <div class="shift-picker" id="osp-shift-pick">
+                        ${SHIFTS.map(s => `<div class="shift-opt ${myShift===s?'selected':''}" data-shift="${s}" onclick="App._ospitePickShift('${s}')">${s}</div>`).join('')}
+                    </div>
+                    <input type="hidden" id="osp-shift" value="${myShift||''}">
+                    <p class="text-sm text-gray" style="margin-top:0.4rem">Suggerito: il tuo turno (${myShift||'—'}). Cambialo se l'ospite consuma un caffè di altro turno.</p>
+                </div>
+            </div>
+            <div id="osp-stock-info" class="text-sm text-gray mb-1"></div>
+            <button class="btn btn-green btn-full" id="osp-confirm-btn" onclick="App.doOspiteBuy()" disabled>💵 Vendi (pagamento immediato)</button>
+        `);
+    },
+
+    _ospitePickShift(s) {
+        document.getElementById('osp-shift').value = s;
+        document.querySelectorAll('#osp-shift-pick .shift-opt').forEach(el => {
+            el.classList.toggle('selected', el.dataset.shift === s);
+        });
+        this._ospiteUpdateInfo();
+    },
+
+    _ospiteOnProductChange() {
+        const prodId = document.getElementById('osp-prod').value;
+        const p = this.products.find(x => x.id === prodId);
+        const wrap = document.getElementById('osp-shift-wrap');
+
+        if (!p) {
+            wrap.classList.add('hidden');
+            document.getElementById('osp-stock-info').innerHTML = '';
+            document.getElementById('osp-confirm-btn').disabled = true;
+            return;
+        }
+        if (p.isCoffee) {
+            wrap.classList.remove('hidden');
+            // Se il turno suggerito non è tra usedByShifts, prendi il primo disponibile
+            const current = document.getElementById('osp-shift').value;
+            if (!p.usedByShifts.includes(current)) {
+                this._ospitePickShift(p.usedByShifts[0]);
+            }
+            // Disabilita visualmente i turni non disponibili per questo caffè
+            document.querySelectorAll('#osp-shift-pick .shift-opt').forEach(el => {
+                const allowed = p.usedByShifts.includes(el.dataset.shift);
+                el.style.opacity = allowed ? '1' : '0.3';
+                el.style.pointerEvents = allowed ? 'auto' : 'none';
+            });
+        } else {
+            wrap.classList.add('hidden');
+        }
+        this._ospiteUpdateInfo();
+    },
+
+    _ospiteUpdateInfo() {
+        const prodId = document.getElementById('osp-prod').value;
+        const p = this.products.find(x => x.id === prodId);
+        const info = document.getElementById('osp-stock-info');
+        const btn = document.getElementById('osp-confirm-btn');
+        if (!p) { info.innerHTML = ''; btn.disabled = true; return; }
+
+        if (p.isCoffee) {
+            const sh = document.getElementById('osp-shift').value;
+            if (!sh) { info.innerHTML = '<span style="color:#dc2626">Seleziona un turno</span>'; btn.disabled = true; return; }
+            const stock = p.shiftStock[sh] || 0;
+            info.innerHTML = `Stock turno ${sh}: <strong style="color:${stock<=0?'#dc2626':'#16a34a'}">${stock} pz</strong> · La cassa diventerà <strong>€${(this.cashRegister + p.price).toFixed(2)}</strong>`;
+            btn.disabled = stock <= 0;
+            btn.textContent = stock > 0 ? `💵 Vendi €${p.price.toFixed(2)} (turno ${sh})` : '❌ Esaurito in questo turno';
+        } else {
+            info.innerHTML = `Stock: <strong style="color:${p.stock<=0?'#dc2626':'#16a34a'}">${p.stock} pz</strong> · La cassa diventerà <strong>€${(this.cashRegister + p.price).toFixed(2)}</strong>`;
+            btn.disabled = p.stock <= 0;
+            btn.textContent = p.stock > 0 ? `💵 Vendi €${p.price.toFixed(2)}` : '❌ Esaurito';
+        }
+    },
+
+    async doOspiteBuy() {
+        const prodId = document.getElementById('osp-prod').value;
+        const p = this.products.find(x => x.id === prodId);
+        if (!p) return;
+        const shift = p.isCoffee ? document.getElementById('osp-shift').value : null;
+        if (p.isCoffee && !shift) { alert('Seleziona un turno'); return; }
+        if (p.isCoffee && !p.usedByShifts.includes(shift)) { alert('Questo caffè non è del turno selezionato'); return; }
+
+        // Verifica stock
+        if (p.isCoffee) {
+            if ((p.shiftStock[shift]||0) <= 0) { alert('Esaurito!'); return; }
+        } else {
+            if (p.stock <= 0) { alert('Esaurito!'); return; }
+        }
+
+        const ctx = p.isCoffee ? ` (turno ${shift})` : '';
+        if (!confirm(`Vendita ospite:\n\n${p.name}${ctx} · €${p.price.toFixed(2)}\n\nIncasso immediato in cassa. Procedere?`)) return;
+
+        // Scala stock
+        if (p.isCoffee) p.shiftStock[shift]--;
+        else p.stock--;
+
+        // Cassa +
+        this.cashRegister += p.price;
+
+        // Registra come transazione speciale "ospite"
+        this.transactions.push({
+            id: uid(), memberId: 'OSPITE', memberName: '👤 Ospite',
+            productId: p.id, productName: p.name,
+            price: p.price, date: new Date().toISOString(),
+            paid: true, shift: shift,
+            isCoffee: !!p.isCoffee,
+            isOspite: true,
+            registeredBy: Auth.user.name, registeredByUid: Auth.user.uid
+        });
+
+        await this.save();
+        modalClose();
+        alert(`✅ Vendita ospite registrata!\n\n${p.name}${ctx}\n+€${p.price.toFixed(2)} in cassa`);
     },
 
     page_carico() {
@@ -1007,10 +1144,13 @@ const App = {
     // ---- VENDITA (admin) ----
     _saleSelected: '',
     page_vendita() {
-        if (this.members.length === 0) return '<div class="alert alert-warn">Nessun vigile registrato. Vai a Vigili.</div>';
         const sel = this.members.find(m => m.id === this._saleSelected);
         return `
-            <h2>🛒 Registra Vendita</h2>
+            <div class="flex-between mb-2">
+                <h2 style="margin:0">🛒 Registra Vendita</h2>
+                <button class="btn btn-orange btn-sm" onclick="App.modalOspite()">👤 Vendita Ospite</button>
+            </div>
+            ${this.members.length === 0 ? '<div class="alert alert-warn">Nessun vigile registrato. Aggiungili nella tab 👥 Vigili. Per vendite a esterni puoi comunque usare il bottone "Vendita Ospite".</div>' : `
             <div class="mb-2">
                 <label class="text-sm" style="font-weight:600;display:block;margin-bottom:0.25rem">Seleziona Vigile:</label>
                 <select onchange="App._saleSelected=this.value;App.renderContent()">
@@ -1047,6 +1187,7 @@ const App = {
                         ℹ️ Non mostrati: caffè per altri turni (${this.products.filter(p => p.isCoffee && sel.shift && !p.usedByShifts.includes(sel.shift)).map(p=>escapeHtml(p.name)).join(', ')})
                     </p>
                 ` : ''}
+            `}
             `}`;
     },
 
@@ -1786,12 +1927,12 @@ const App = {
 
         return `
             <h2>👑 Gestione Ruoli</h2>
-            <div class="alert alert-info">Solo tu (Gestore) puoi promuovere o rimuovere amministratori. Massimo 4 admin (uno per turno è ideale).</div>
+            <div class="alert alert-info">Solo tu (Gestore) puoi promuovere o rimuovere amministratori. Massimo 8 admin (2 per turno).</div>
 
             <h3>👑 Gestore</h3>
             ${supers.map(u => `<div class="member-item"><div><strong>${escapeHtml(u.name)}</strong>${u.shift?` <span class="chip chip-shift">T${u.shift}</span>`:''}<br><span class="text-sm text-gray">${escapeHtml(u.email)}</span></div><span class="chip chip-green">Gestore</span></div>`).join('')}
 
-            <h3 style="margin-top:1rem">🔧 Amministratori (${admins.length}/4)</h3>
+            <h3 style="margin-top:1rem">🔧 Amministratori (${admins.length}/8)</h3>
             ${admins.length===0?'<p class="text-gray text-sm">Nessun amministratore nominato</p>':
                 admins.map(u=>`
                     <div class="member-item">
@@ -1804,7 +1945,7 @@ const App = {
                 regulars.map(u=>`
                     <div class="member-item">
                         <div><strong>${escapeHtml(u.name)}</strong>${u.shift?` <span class="chip chip-shift">T${u.shift}</span>`:''}<br><span class="text-sm text-gray">${escapeHtml(u.email)}</span></div>
-                        <button class="btn btn-green btn-sm" ${admins.length>=4?'disabled title="Massimo 4 admin"':''} onclick="App.makeAdmin('${u.uid}')">Nomina Admin</button>
+                        <button class="btn btn-green btn-sm" ${admins.length>=8?'disabled title="Massimo 8 admin"':''} onclick="App.makeAdmin('${u.uid}')">Nomina Admin</button>
                     </div>`).join('')}`;
     },
 
@@ -1930,7 +2071,7 @@ const App = {
 
     async makeAdmin(userId) {
         const admins = this.users.filter(u => u.role === 'admin');
-        if (admins.length >= 4) { alert('Massimo 4 admin (uno per turno).'); return; }
+        if (admins.length >= 8) { alert('Massimo 8 admin (2 per turno).'); return; }
         if (!confirm('Confermi nomina ad amministratore?')) return;
         try {
             await db.ref('users/'+userId+'/role').set('admin');
