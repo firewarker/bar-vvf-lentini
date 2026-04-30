@@ -396,7 +396,7 @@ const Auth = {
         } catch(e) {
             return this.showError('reg-error',
                 e.code === 'auth/email-already-in-use'
-                    ? 'Email già registrata. Usa "Accedi" oppure scegli un'altra email.'
+                    ? `Email già registrata. Usa "Accedi" oppure scegli un'altra email.`
                     : 'Errore registrazione: ' + e.message);
         }
 
