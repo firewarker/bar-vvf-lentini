@@ -1659,18 +1659,28 @@ const App = {
         await this.save();
     },
 
-    modalLink(memberId) {
+    async modalLink(memberId) {
         const m = this.members.find(x=>x.id===memberId);
         if (!m) return;
+
+        // Defensive: se la lista utenti è vuota, ricaricala dal database
+        if (this.users.length === 0) {
+            try {
+                const snap = await db.ref('users').once('value');
+                this.users = [];
+                snap.forEach(c => this.users.push({ uid: c.key, ...c.val() }));
+            } catch(e) { console.error('Errore caricamento utenti:', e); }
+        }
+
         const unlinked = this.users.filter(u => !this.members.some(mem => mem.userId === u.uid));
 
         modal(`🔗 Collega: ${escapeHtml(m.name)}`, `
             <p class="text-sm text-gray mb-1">Collega un account registrato a questo vigile.</p>
             ${unlinked.length === 0 ? '<div class="alert alert-warn">Nessun account disponibile. Devono prima registrarsi nell\'app.</div>' : `
-                <div class="form-group"><label>Seleziona utente</label>
+                <div class="form-group"><label>Seleziona utente (${unlinked.length} disponibili)</label>
                     <select id="link-uid">
                         <option value="">-- Seleziona --</option>
-                        ${unlinked.map(u => `<option value="${u.uid}">${escapeHtml(u.name)} (${escapeHtml(u.email)})${u.shift?' [T'+u.shift+']':''}</option>`).join('')}
+                        ${unlinked.map(u => `<option value="${u.uid}">${escapeHtml(u.name)} (${escapeHtml(u.email)})${u.shift?' [T'+u.shift+']':''}${u.role==='super_admin'?' 👑':u.role==='admin'?' 🔧':''}</option>`).join('')}
                     </select>
                 </div>
                 <div class="alert alert-info text-sm">Il turno del vigile verrà allineato a quello dell'account selezionato.</div>
@@ -1957,7 +1967,7 @@ const App = {
         const pct = total > 0 ? Math.round((linkedCount / total) * 100) : 0;
 
         const availableUsers = this.users.filter(u =>
-            !this.members.some(m => m.userId === u.uid) && u.role !== 'super_admin'
+            !this.members.some(m => m.userId === u.uid)
         );
 
         return `
