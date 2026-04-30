@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Bar VVF">
-    <title>Bar VVF Lentini</title>
+    <title>Bar VVF Lentini - FIX UTENTI v2</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚒</text></svg>">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -203,7 +203,8 @@
                 <input type="password" id="login-pass" placeholder="••••••" autocomplete="current-password">
             </div>
             <button class="login-btn primary" onclick="Auth.login()">Accedi</button>
-            <div class="login-toggle">Non hai un account? <a onclick="Auth.toggleView('register')">Registrati</a></div>
+            <div class="login-toggle" style="margin-bottom:0.3rem">Non hai un account? <a onclick="Auth.toggleView('register')">Registrati</a></div>
+            <div class="login-toggle"><a onclick="Auth.resetPassword()" style="color:#6b7280">Password dimenticata?</a></div>
         </div>
 
         <div id="register-view" class="hidden">
@@ -231,6 +232,39 @@
             </div>
             <button class="login-btn primary" onclick="Auth.register()">Registrati</button>
             <div class="login-toggle">Hai già un account? <a onclick="Auth.toggleView('login')">Accedi</a></div>
+        </div>
+
+        <!-- ======= REPAIR VIEW (account orfano) ======= -->
+        <div id="repair-view" class="hidden">
+            <div id="repair-error" class="login-error hidden"></div>
+            <div class="login-error" style="display:block;background:#fef3c7;color:#78350f;margin-bottom:1rem;">
+                ⚠️ Il tuo account Firebase esiste ma il profilo interno è mancante.<br>
+                Reinserisci i tuoi dati per ripristinarlo.
+            </div>
+            <div class="form-group">
+                <label>Email rilevata</label>
+                <input type="email" id="repair-email-info" disabled
+                       style="background:#f3f4f6;color:#6b7280;">
+            </div>
+            <div class="form-group">
+                <label>Password attuale</label>
+                <input type="password" id="repair-pass" placeholder="••••••">
+            </div>
+            <div class="form-group">
+                <label>Il tuo nome e cognome</label>
+                <input type="text" id="repair-name" placeholder="Mario Rossi">
+            </div>
+            <div class="form-group">
+                <label>Il tuo turno</label>
+                <div class="shift-picker" id="repair-shift">
+                    <div class="shift-opt" data-shift="A" onclick="Auth.pickRepairShift('A')">A</div>
+                    <div class="shift-opt" data-shift="B" onclick="Auth.pickRepairShift('B')">B</div>
+                    <div class="shift-opt" data-shift="C" onclick="Auth.pickRepairShift('C')">C</div>
+                    <div class="shift-opt" data-shift="D" onclick="Auth.pickRepairShift('D')">D</div>
+                </div>
+            </div>
+            <button class="login-btn primary" onclick="Auth.repairAccount()">Ripristina Account</button>
+            <div class="login-toggle"><a onclick="Auth.toggleView('login')">← Torna al login</a></div>
         </div>
     </div>
 </div>
@@ -314,8 +348,11 @@ const Auth = {
     toggleView(view) {
         document.getElementById('login-view').classList.toggle('hidden', view !== 'login');
         document.getElementById('register-view').classList.toggle('hidden', view !== 'register');
+        document.getElementById('repair-view').classList.toggle('hidden', view !== 'repair');
         document.getElementById('login-error').classList.add('hidden');
         document.getElementById('reg-error').classList.add('hidden');
+        const repairErr = document.getElementById('repair-error');
+        if (repairErr) repairErr.classList.add('hidden');
     },
 
     pickShift(s) {
@@ -351,22 +388,68 @@ const Auth = {
         if (!this._pickedShift) return this.showError('reg-error', 'Seleziona il tuo turno');
 
         const isSuper = email.toLowerCase() === SUPER_ADMIN_EMAIL;
+
+        // Step 1: crea utente Firebase Auth
+        let cred;
         try {
-            const cred = await fbAuth.createUserWithEmailAndPassword(email, pass);
+            cred = await fbAuth.createUserWithEmailAndPassword(email, pass);
+        } catch(e) {
+            return this.showError('reg-error',
+                e.code === 'auth/email-already-in-use'
+                    ? `Email già registrata. Usa "Accedi" oppure scegli un'altra email.`
+                    : 'Errore registrazione: ' + e.message);
+        }
+
+        // Step 2: salva profilo nel database (separato per poter fare rollback)
+        try {
             const role = isSuper ? 'super_admin' : 'user';
             await db.ref('users/' + cred.user.uid).set({
                 name, email, role, shift: this._pickedShift,
                 createdAt: new Date().toISOString()
             });
         } catch(e) {
-            this.showError('reg-error', e.code === 'auth/email-already-in-use' ? 'Email già registrata' : 'Errore: ' + e.message);
+            // Rollback: elimina l'account Firebase appena creato
+            try { await cred.user.delete(); } catch(_) {}
+            return this.showError('reg-error',
+                'Errore salvataggio profilo nel database: ' + e.message +
+                '. Riprova o controlla le regole del database Firebase.');
         }
     },
 
     async loadProfile(firebaseUser) {
         const snap = await db.ref('users/' + firebaseUser.uid).once('value');
-        const data = snap.val();
-        if (!data) { fbAuth.signOut(); return; }
+        let data = snap.val();
+
+        // ── ACCOUNT ORFANO: esiste in Firebase Auth ma non nel DB ──
+        if (!data) {
+            // Caso speciale: superadmin → auto-crea il record
+            if (firebaseUser.email.toLowerCase() === SUPER_ADMIN_EMAIL) {
+                const autoData = {
+                    name: 'Luca Laganà',
+                    email: firebaseUser.email,
+                    role: 'super_admin',
+                    shift: null,
+                    createdAt: new Date().toISOString(),
+                    autoCreated: true
+                };
+                try {
+                    await db.ref('users/' + firebaseUser.uid).set(autoData);
+                    data = autoData;
+                } catch(e) {
+                    fbAuth.signOut();
+                    document.getElementById('login-error').textContent =
+                        'Errore creazione profilo: ' + e.message;
+                    document.getElementById('login-error').classList.remove('hidden');
+                    return;
+                }
+            } else {
+                // Utente normale: mostra form di ripristino
+                fbAuth.signOut();
+                this._showRepairView(firebaseUser.email);
+                return;
+            }
+        }
+
         this.user = { uid: firebaseUser.uid, email: firebaseUser.email, ...data };
 
         document.getElementById('login-screen').classList.add('hidden');
@@ -383,7 +466,66 @@ const Auth = {
         App.init();
     },
 
+    // Mostra la view di ripristino per account orfani
+    _showRepairView(email) {
+        document.getElementById('login-view').classList.add('hidden');
+        document.getElementById('register-view').classList.add('hidden');
+        document.getElementById('repair-view').classList.remove('hidden');
+        document.getElementById('repair-email-info').textContent = email;
+        this._repairEmail = email;
+    },
+
+    async repairAccount() {
+        const name = document.getElementById('repair-name').value.trim();
+        const pass = document.getElementById('repair-pass').value;
+        if (!name || !pass) return this.showError('repair-error', 'Compila tutti i campi');
+        if (pass.length < 6) return this.showError('repair-error', 'Password minimo 6 caratteri');
+        if (!this._repairShift) return this.showError('repair-error', 'Seleziona il tuo turno');
+        try {
+            const cred = await fbAuth.signInWithEmailAndPassword(this._repairEmail, pass);
+            await db.ref('users/' + cred.user.uid).set({
+                name,
+                email: this._repairEmail,
+                role: 'user',
+                shift: this._repairShift,
+                createdAt: new Date().toISOString(),
+                repairedAt: new Date().toISOString()
+            });
+            // loadProfile verrà chiamato da onAuthStateChanged
+        } catch(e) {
+            this.showError('repair-error',
+                e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential'
+                    ? 'Password errata.'
+                    : 'Errore: ' + e.message);
+        }
+    },
+
+    pickRepairShift(s) {
+        this._repairShift = s;
+        document.querySelectorAll('#repair-shift .shift-opt').forEach(el =>
+            el.classList.toggle('selected', el.dataset.shift === s));
+    },
+
     logout() { fbAuth.signOut(); location.reload(); },
+
+    async resetPassword() {
+        const email = document.getElementById('login-email').value.trim();
+        if (!email) {
+            this.showError('login-error', 'Inserisci prima la tua email nel campo sopra.');
+            return;
+        }
+        try {
+            await fbAuth.sendPasswordResetEmail(email);
+            document.getElementById('login-error').style.background = '#d1fae5';
+            document.getElementById('login-error').style.color = '#065f46';
+            this.showError('login-error', '✅ Email di reset inviata a ' + email + '. Controlla la casella (anche spam).');
+        } catch(e) {
+            this.showError('login-error',
+                e.code === 'auth/user-not-found'
+                    ? 'Nessun account trovato con questa email.'
+                    : 'Errore: ' + e.message);
+        }
+    },
 
     isAdmin() { return this.user && (this.user.role === 'admin' || this.user.role === 'super_admin'); },
     isSuperAdmin() { return this.user && this.user.role === 'super_admin'; },
@@ -455,6 +597,11 @@ const App = {
             usersRef.on('value', snap => {
                 this.users = [];
                 snap.forEach(c => this.users.push({ uid: c.key, ...c.val() }));
+                // Re-render solo se siamo già su tab che usa users
+                if (['admin','vigili','turni'].includes(this.tab)) this.render();
+            });
+            // Fetch immediato per popolare this.users subito (non aspettare il listener)
+            this._fetchUsers().then(() => {
                 if (['admin','vigili','turni'].includes(this.tab)) this.render();
             });
             this.listeners.push(() => usersRef.off());
@@ -650,7 +797,56 @@ const App = {
         ).join('');
     },
 
-    switchTab(t) { this.tab = t; this.renderTabs(); this.renderContent(); },
+    // Fetch SEMPRE fresco utenti dal DB (risolve timing con Firebase listener)
+    async _fetchUsers() {
+        try {
+            const snap = await db.ref('users').once('value');
+            this.users = [];
+            snap.forEach(c => this.users.push({ uid: c.key, ...c.val() }));
+        } catch(e) { console.error('Fetch users error:', e); }
+    },
+
+    switchTab(t) {
+        this.tab = t;
+        this.renderTabs();
+        if (t === 'admin' && Auth.isSuperAdmin()) {
+            // Delega a setAdminTab che fa fetch utenti garantito
+            this.users = [];
+            this.setAdminTab(this._adminTab);
+        } else {
+            this.renderContent();
+        }
+    },
+
+    // Handler async per i sotto-tab admin (sostituisce renderContent() inline)
+    async setAdminTab(tab) {
+        this._adminTab = tab;
+        // Mostra loading
+        const content = document.getElementById('content');
+        if (content && this.tab === 'admin') {
+            content.innerHTML = `
+                <div class="flex mb-2">
+                    <button class="btn ${tab==='ruoli'?'btn-red':'btn-gray'}" style="flex:1" onclick="App.setAdminTab('ruoli')">👑 Ruoli</button>
+                    <button class="btn ${tab==='migrazione'?'btn-red':'btn-gray'}" style="flex:1" onclick="App.setAdminTab('migrazione')">🔄 Migrazione</button>
+                </div>
+                <p class="text-center text-gray" style="padding:2rem">⏳ Caricamento...</p>`;
+        }
+        // Fetch utenti freschi dal DB
+        const snap = await db.ref('users').once('value');
+        const users = [];
+        snap.forEach(c => users.push({ uid: c.key, ...c.val() }));
+        this.users = users; // aggiorna cache
+        // Render direttamente nel content (non in sub-div orfani)
+        if (content && this.tab === 'admin') {
+            content.innerHTML = this._buildAdminPage(tab, users);
+        }
+    },
+
+
+    setTurniTab(tab) {
+        this._turniTab = tab;
+        this.renderContent();
+    },
 
     renderContent() {
         const fn = 'page_' + this.tab;
@@ -1662,33 +1858,29 @@ const App = {
     async modalLink(memberId) {
         const m = this.members.find(x=>x.id===memberId);
         if (!m) return;
-
-        // Defensive: se la lista utenti è vuota, ricaricala dal database
-        if (this.users.length === 0) {
-            try {
-                const snap = await db.ref('users').once('value');
-                this.users = [];
-                snap.forEach(c => this.users.push({ uid: c.key, ...c.val() }));
-            } catch(e) { console.error('Errore caricamento utenti:', e); }
+        try {
+            const snap = await db.ref('users').once('value');
+            this.users = [];
+            snap.forEach(c => this.users.push({ uid: c.key, ...c.val() }));
+        } catch(e) {
+            console.error('Errore fetch users modalLink:', e);
         }
-
-        const unlinked = this.users.filter(u => !this.members.some(mem => mem.userId === u.uid));
-
+        const unlinked = this.users.filter(u => !this.members.some(mem => mem.userId === u.uid)).sort((a,b) => (a.name || '').localeCompare(b.name || '', 'it'));
         modal(`🔗 Collega: ${escapeHtml(m.name)}`, `
-            <p class="text-sm text-gray mb-1">Collega un account registrato a questo vigile.</p>
-            ${unlinked.length === 0 ? '<div class="alert alert-warn">Nessun account disponibile. Devono prima registrarsi nell\'app.</div>' : `
+            <p class="text-sm text-gray mb-1">Scegli uno degli account presenti in <code>/users</code> del database.</p>
+            <div class="alert alert-info">Account liberi trovati nel DB: <strong>${unlinked.length}</strong></div>
+            ${unlinked.length === 0 ? '<div class="alert alert-warn">Nessun account libero disponibile nel database.</div>' : `
                 <div class="form-group"><label>Seleziona utente (${unlinked.length} disponibili)</label>
                     <select id="link-uid">
                         <option value="">-- Seleziona --</option>
-                        ${unlinked.map(u => `<option value="${u.uid}">${escapeHtml(u.name)} (${escapeHtml(u.email)})${u.shift?' [T'+u.shift+']':''}${u.role==='super_admin'?' 👑':u.role==='admin'?' 🔧':''}</option>`).join('')}
+                        ${unlinked.map(u => `<option value="${u.uid}">${escapeHtml(u.name || '(senza nome)')} (${escapeHtml(u.email || '')})${u.shift?' [T'+u.shift+']':''}${u.role==='superadmin' || u.role==='super_admin'?' 👑':u.role==='admin'?' 🔧':''}</option>`).join('')}
                     </select>
                 </div>
-                <div class="alert alert-info text-sm">Il turno del vigile verrà allineato a quello dell'account selezionato.</div>
+                <div class="alert alert-info text-sm">Il turno del vigile verrà allineato a quello dell'account selezionato, se presente.</div>
                 <button class="btn btn-red btn-full" onclick="App.doLink('${memberId}')">Collega</button>
             `}
         `);
     },
-
     async doLink(memberId) {
         const userId = document.getElementById('link-uid').value;
         if (!userId) { alert('Seleziona un utente'); return; }
@@ -1709,12 +1901,12 @@ const App = {
         return `
             <h2>🕐 Gestione Turni</h2>
             <div class="flex mb-2" style="flex-wrap:wrap">
-                <button class="btn ${this._turniTab==='overview'?'btn-red':'btn-gray'} btn-sm" onclick="App._turniTab='overview';App.renderContent()">📊 Riepilogo</button>
-                <button class="btn ${this._turniTab==='assign'?'btn-red':'btn-gray'} btn-sm" onclick="App._turniTab='assign';App.renderContent()">👥 Assegna Vigili</button>
-                <button class="btn ${this._turniTab==='coffee'?'btn-red':'btn-gray'} btn-sm" onclick="App._turniTab='coffee';App.renderContent()">☕ Distribuisci Caffè</button>
+                <button class="btn ${this._turniTab==='overview'?'btn-red':'btn-gray'} btn-sm" onclick="App.setTurniTab('overview')">📊 Riepilogo</button>
+                <button class="btn ${this._turniTab==='assign'?'btn-red':'btn-gray'} btn-sm" onclick="App.setTurniTab('assign')">👥 Assegna Vigili</button>
+                <button class="btn ${this._turniTab==='coffee'?'btn-red':'btn-gray'} btn-sm" onclick="App.setTurniTab('coffee')">☕ Distribuisci Caffè</button>
             </div>
             ${this._turniTab === 'overview' ? this._turniOverview() : ''}
-            ${this._turniTab === 'assign' ? this._turniAssign() : ''}
+            ${this._turniTab === 'assign' ? this._turniAssignShell() : ''}
             ${this._turniTab === 'coffee' ? this._turniCoffee() : ''}
         `;
     },
@@ -1758,6 +1950,21 @@ const App = {
                 </div>
             `;
         }).join('');
+    },
+
+    // Shell: lancia fetch async poi inietta il vero contenuto
+    _turniAssignShell() {
+        db.ref('users').once('value', snap => {
+            this.users = [];
+            snap.forEach(c => this.users.push({ uid: c.key, ...c.val() }));
+            const el = document.getElementById('turni-assign-dyn');
+            if (el && this.tab === 'turni' && this._turniTab === 'assign') {
+                el.innerHTML = this._turniAssign();
+            }
+        });
+        return `<div id="turni-assign-dyn">
+            <p class="text-center text-gray" style="padding:2rem">⏳ Caricamento...</p>
+        </div>`;
     },
 
     _turniAssign() {
@@ -1919,21 +2126,149 @@ const App = {
     },
 
     // ---- ADMIN (super_admin) ----
-    _adminTab: 'ruoli',
-    page_admin() {
-        if (!Auth.isSuperAdmin()) return '<p>Accesso negato</p>';
-        return `
-            <div class="flex mb-2">
-                <button class="btn ${this._adminTab==='ruoli'?'btn-red':'btn-gray'}" style="flex:1" onclick="App._adminTab='ruoli';App.renderContent()">👑 Ruoli</button>
-                <button class="btn ${this._adminTab==='migrazione'?'btn-red':'btn-gray'}" style="flex:1" onclick="App._adminTab='migrazione';App.renderContent()">🔄 Migrazione</button>
-            </div>
-            ${this._adminTab === 'ruoli' ? this._adminRuoli() : this._adminMigrazione()}`;
+
+    _dbUsersSorted() {
+        return [...this.users].sort((a,b) => {
+            const an = (a.name || '').toLowerCase();
+            const bn = (b.name || '').toLowerCase();
+            return an.localeCompare(bn, 'it');
+        });
     },
 
-    _adminRuoli() {
-        const admins = this.users.filter(u => u.role === 'admin');
-        const regulars = this.users.filter(u => u.role === 'user');
-        const supers = this.users.filter(u => u.role === 'super_admin');
+    _linkedMemberForUser(uid) {
+        return this.members.find(m => m.userId === uid) || null;
+    },
+
+    _unlinkedMembers() {
+        return this.members.filter(m => !m.userId).sort((a,b) => a.name.localeCompare(b.name, 'it'));
+    },
+
+    _dbUsersPanel() {
+        const users = this._dbUsersSorted();
+        const linked = users.filter(u => this._linkedMemberForUser(u.uid));
+        const free = users.filter(u => !this._linkedMemberForUser(u.uid));
+
+        return `
+            <div class="divider"></div>
+            <h3>🗂️ Utenti nel database (${users.length})</h3>
+            <div class="alert alert-info">
+                Qui vedi <strong>tutti</strong> i record presenti in <code>/users</code> del Realtime Database. Gli utenti che compaiono qui sono quelli che l'app può collegare ai vigili.
+            </div>
+
+            <div class="stats-row">
+                <div class="stat-card"><div class="label">Totali DB</div><div class="value">${users.length}</div></div>
+                <div class="stat-card"><div class="label">Già collegati</div><div class="value">${linked.length}</div></div>
+                <div class="stat-card"><div class="label">Liberi</div><div class="value">${free.length}</div></div>
+                <div class="stat-card"><div class="label">Vigili liberi</div><div class="value">${this._unlinkedMembers().length}</div></div>
+            </div>
+
+            ${users.length === 0 ? '<div class="alert alert-warn">Nessun record presente in /users.</div>' : users.map(u => {
+                const linkedMember = this._linkedMemberForUser(u.uid);
+                return `
+                    <div class="member-item ${linkedMember ? '' : 'no-shift'}">
+                        <div style="flex:1;min-width:0">
+                            <strong>${escapeHtml(u.name || '(senza nome)')}</strong>
+                            ${u.shift ? `<span class="chip chip-shift" style="margin-left:0.3rem">T${u.shift}</span>` : ''}
+                            ${u.role === 'super_admin' ? '<span class="chip chip-green" style="margin-left:0.3rem">Gestore</span>' : ''}
+                            ${u.role === 'admin' ? '<span class="chip chip-blue" style="margin-left:0.3rem">Admin</span>' : ''}
+                            ${u.role === 'user' ? '<span class="chip chip-gray" style="margin-left:0.3rem">User</span>' : ''}
+                            <br><span class="text-sm text-gray">${escapeHtml(u.email || '')}</span>
+                            <br><span class="text-sm ${linkedMember ? 'text-gray' : ''}" style="color:${linkedMember ? '#6b7280' : '#dc2626'}">
+                                ${linkedMember ? 'Collegato a: ' + escapeHtml(linkedMember.name) : 'Non collegato a nessun vigile'}
+                            </span>
+                        </div>
+                        <div style="display:flex;gap:0.35rem;flex-wrap:wrap;justify-content:flex-end">
+                            ${linkedMember
+                                ? `<button class="btn btn-gray btn-sm" onclick="App.unlinkUser('${u.uid}')">Scollega</button>`
+                                : `<button class="btn btn-red btn-sm" onclick="App.openUserLinker('${u.uid}')">Collega a vigile</button>`}
+                        </div>
+                    </div>`;
+            }).join('')}
+        `;
+    },
+
+    openUserLinker(uid) {
+        const u = this.users.find(x => x.uid === uid);
+        if (!u) return alert('Utente non trovato nel database');
+        const freeMembers = this._unlinkedMembers();
+        modal(`🔗 Collega utente: ${escapeHtml(u.name || u.email)}`, `
+            <div class="alert alert-info">
+                <strong>${escapeHtml(u.name || '(senza nome)')}</strong><br>
+                <span class="text-sm text-gray">${escapeHtml(u.email || '')}</span>
+                ${u.shift ? `<br><span class="text-sm">Turno account: <strong>${u.shift}</strong></span>` : ''}
+            </div>
+            ${freeMembers.length === 0 ? '<div class="alert alert-warn">Non ci sono vigili liberi da collegare.</div>' : `
+                <div class="form-group">
+                    <label>Seleziona il vigile</label>
+                    <select id="manual-link-member">
+                        <option value="">-- Seleziona vigile --</option>
+                        ${freeMembers.map(m => `<option value="${m.id}">${escapeHtml(m.name)}${m.shift ? ' [T'+m.shift+']' : ''}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="alert alert-info text-sm">Il turno del vigile verrà allineato al turno dell'account, se presente.</div>
+                <button class="btn btn-red btn-full" onclick="App.linkUserToMember('${uid}')">Conferma collegamento</button>
+            `}
+        `);
+    },
+
+    async linkUserToMember(uid) {
+        const memberId = document.getElementById('manual-link-member').value;
+        if (!memberId) return alert('Seleziona un vigile');
+        const m = this.members.find(x => x.id === memberId);
+        const u = this.users.find(x => x.uid === uid);
+        if (!m || !u) return alert('Dati non trovati');
+        m.userId = uid;
+        if (u.shift) m.shift = u.shift;
+        await this.save();
+        modalClose();
+        this.render();
+        alert('✅ Utente collegato correttamente');
+    },
+
+    async unlinkUser(uid) {
+        const m = this.members.find(x => x.userId === uid);
+        if (!m) return alert('Collegamento non trovato');
+        if (!confirm(`Scollegare ${m.name} dall'account?`)) return;
+        delete m.userId;
+        await this.save();
+        this.render();
+        alert('✅ Collegamento rimosso');
+    },
+
+    _adminTab: 'ruoli',
+
+    page_admin() {
+        if (!Auth.isSuperAdmin()) return '<p>Accesso negato</p>';
+        // Usa this.users se già disponibili, altrimenti mostra loading e aspetta
+        if (this.users.length > 0) {
+            return this._buildAdminPage(this._adminTab, this.users);
+        }
+        // Fetch async: aggiorna il contenuto quando arriva
+        db.ref('users').once('value').then(snap => {
+            this.users = [];
+            snap.forEach(c => this.users.push({ uid: c.key, ...c.val() }));
+            const el = document.getElementById('content');
+            if (el && this.tab === 'admin') {
+                el.innerHTML = this._buildAdminPage(this._adminTab, this.users);
+            }
+        });
+        return `<p class="text-center text-gray" style="padding:2rem">⏳ Caricamento utenti...</p>`;
+    },
+
+    _buildAdminPage(tab, users) {
+        return `
+            <div class="flex mb-2">
+                <button class="btn ${tab==='ruoli'?'btn-red':'btn-gray'}" style="flex:1" onclick="App.setAdminTab('ruoli')">👑 Ruoli</button>
+                <button class="btn ${tab==='migrazione'?'btn-red':'btn-gray'}" style="flex:1" onclick="App.setAdminTab('migrazione')">🔄 Migrazione</button>
+            </div>
+            ${tab === 'ruoli' ? this._adminRuoli(users) : this._adminMigrazione(users)}`;
+    },
+
+
+    _adminRuoli(users = this.users) {
+        const admins = users.filter(u => u.role === 'admin');
+        const regulars = users.filter(u => u.role === 'user');
+        const supers = users.filter(u => u.role === 'super_admin');
 
         return `
             <h2>👑 Gestione Ruoli</h2>
@@ -1959,14 +2294,14 @@ const App = {
                     </div>`).join('')}`;
     },
 
-    _adminMigrazione() {
+    _adminMigrazione(users = this.users) {
         const total = this.members.length;
         const linked = this.members.filter(m => m.userId);
         const unlinked = this.members.filter(m => !m.userId);
         const linkedCount = linked.length;
         const pct = total > 0 ? Math.round((linkedCount / total) * 100) : 0;
 
-        const availableUsers = this.users.filter(u =>
+        const availableUsers = users.filter(u =>
             !this.members.some(m => m.userId === u.uid)
         );
 
@@ -2014,7 +2349,7 @@ const App = {
                     <summary style="cursor:pointer;font-weight:600;color:#16a34a">✅ Già collegati (${linkedCount})</summary>
                     <div style="margin-top:0.5rem">
                         ${linked.map(m => {
-                            const u = this.users.find(u => u.uid === m.userId);
+                            const u = users.find(u => u.uid === m.userId);
                             return `<div class="mig-link-row linked">
                                 <div>
                                     <strong>${escapeHtml(m.name)}</strong>${m.shift?` <span class="chip chip-shift">T${m.shift}</span>`:''}<br>
@@ -2049,7 +2384,7 @@ const App = {
 
     async confirmLink(memberId, userId) {
         const m = this.members.find(x => x.id === memberId);
-        const u = this.users.find(x => x.uid === userId);
+        const u = users.find(x => x.uid === userId);
         if (!m || !u) return;
 
         const debtMsg = (m.balance||0) > 0 ? `\n💰 Debito ereditato: €${m.balance.toFixed(2)}` : '';
@@ -2111,4 +2446,118 @@ fbAuth.onAuthStateChanged(user => {
 });
 </script>
 </body>
-</html>
+</html>    _adminRuoli() {
+        const admins = this.users.filter(u => u.role === 'admin');
+        const regulars = this.users.filter(u => u.role === 'user');
+        const supers = this.users.filter(u => u.role === 'super_admin');
+
+        return `
+            <h2>👑 Gestione Ruoli</h2>
+            <div class="alert alert-info">Questa sezione mostra i ruoli dei record presenti in <code>/users</code> del Realtime Database. Solo questi account sono gestibili dall'app.</div>
+
+            <h3>👑 Gestore</h3>
+            ${supers.length===0?'<p class="text-gray text-sm">Nessun gestore nel database</p>':
+                supers.map(u => `<div class="member-item"><div><strong>${escapeHtml(u.name)}</strong>${u.shift?` <span class="chip chip-shift">T${u.shift}</span>`:''}<br><span class="text-sm text-gray">${escapeHtml(u.email)}</span></div><span class="chip chip-green">Gestore</span></div>`).join('')}
+
+            <h3 style="margin-top:1rem">🔧 Amministratori (${admins.length}/8)</h3>
+            ${admins.length===0?'<p class="text-gray text-sm">Nessun amministratore nominato</p>':
+                admins.map(u=>`
+                    <div class="member-item">
+                        <div><strong>${escapeHtml(u.name)}</strong>${u.shift?` <span class="chip chip-shift">T${u.shift}</span>`:''}<br><span class="text-sm text-gray">${escapeHtml(u.email)}</span></div>
+                        <button class="btn btn-orange btn-sm" onclick="App.removeAdmin('${u.uid}')">Rimuovi Admin</button>
+                    </div>`).join('')}
+
+            <h3 style="margin-top:1rem">👤 Utenti normali (${regulars.length})</h3>
+            ${regulars.length===0?'<p class="text-gray text-sm">Nessun utente registrato nel database</p>':
+                regulars.map(u=>`
+                    <div class="member-item">
+                        <div><strong>${escapeHtml(u.name)}</strong>${u.shift?` <span class="chip chip-shift">T${u.shift}</span>`:''}<br><span class="text-sm text-gray">${escapeHtml(u.email)}</span></div>
+                        <button class="btn btn-green btn-sm" ${admins.length>=8?'disabled title="Massimo 8 admin"':''} onclick="App.makeAdmin('${u.uid}')">Nomina Admin</button>
+                    </div>`).join('')}
+
+            ${this._dbUsersPanel()}`;
+    },    _adminMigrazione() {
+        const total = this.members.length;
+        const linked = this.members.filter(m => m.userId);
+        const unlinked = this.members.filter(m => !m.userId);
+        const linkedCount = linked.length;
+        const pct = total > 0 ? Math.round((linkedCount / total) * 100) : 0;
+
+        const availableUsers = this.users.filter(u =>
+            !this.members.some(m => m.userId === u.uid)
+        ).sort((a,b) => (a.name || '').localeCompare(b.name || '', 'it'));
+
+        return `
+            <h2>🔄 Migrazione Account</h2>
+            <div class="alert alert-info">
+                Questa sezione usa i record presenti in <code>/users</code> del Realtime Database, non l'elenco Firebase Authentication. Gli account visibili qui sono quelli realmente collegabili dall'app.
+            </div>
+
+            <div style="margin-bottom:1.5rem">
+                <div class="flex-between text-sm" style="font-weight:600">
+                    <span>Progresso migrazione</span>
+                    <span>${linkedCount}/${total} vigili collegati</span>
+                </div>
+                <div class="mig-progress">
+                    <div class="mig-progress-bar" style="width:${pct}%"></div>
+                    <div class="mig-progress-text">${pct}%</div>
+                </div>
+            </div>
+
+            <div class="alert alert-info">
+                <strong>Account nel DB liberi da collegare:</strong> ${availableUsers.length}<br>
+                <strong>Vigili ancora da collegare:</strong> ${unlinked.length}
+            </div>
+
+            <h3>⚡ Collegamento rapido</h3>
+            ${unlinked.length === 0 ? '<div class="alert alert-ok">✅ Tutti i vigili sono collegati!</div>' :
+                availableUsers.length === 0 ? '<div class="alert alert-warn">Nessun account libero in /users da collegare.</div>' : `
+                <p class="text-sm text-gray mb-1">Suggerimenti automatici basati sul nome:</p>
+                ${unlinked.map(m => {
+                    const matches = this._findMatches(m, availableUsers);
+                    return `<div class="member-item ${(m.balance||0)>0?'has-debt':''}">
+                        <div>
+                            <strong>${escapeHtml(m.name)}</strong>${m.shift?` <span class="chip chip-shift">T${m.shift}</span>`:''}
+                            ${(m.balance||0)>0?`<br><span class="text-sm" style="color:#dc2626">Debito attuale: €${m.balance.toFixed(2)}</span>`:''}
+                        </div>
+                        <div style="text-align:right">
+                            ${matches.length > 0 ? matches.slice(0,3).map(u => `
+                                <button class="btn btn-blue btn-sm" style="margin:0.1rem" onclick="App.confirmLink('${m.id}','${u.uid}')" title="${escapeAttr(u.email)}">→ ${escapeHtml((u.name||u.email).split(' ')[0])}</button>
+                            `).join('') : ''}
+                            <button class="btn btn-red btn-sm" onclick="App.modalLink('${m.id}')">📋 Tutti gli account DB</button>
+                        </div>
+                    </div>`;
+                }).join('')}
+            `}
+
+            <div class="divider"></div>
+            <h3>🗂️ Tutti gli account del database non ancora collegati (${availableUsers.length})</h3>
+            ${availableUsers.length === 0 ? '<p class="text-gray text-sm">Nessun account libero.</p>' : availableUsers.map(u => `
+                <div class="member-item">
+                    <div>
+                        <strong>${escapeHtml(u.name || '(senza nome)')}</strong>${u.shift?` <span class="chip chip-shift">T${u.shift}</span>`:''}<br>
+                        <span class="text-sm text-gray">${escapeHtml(u.email || '')}</span>
+                    </div>
+                    <button class="btn btn-red btn-sm" onclick="App.openUserLinker('${u.uid}')">Collega manualmente</button>
+                </div>
+            `).join('')}
+
+            ${linked.length > 0 ? `
+                <div class="divider"></div>
+                <details>
+                    <summary style="cursor:pointer;font-weight:600;color:#16a34a">✅ Già collegati (${linkedCount})</summary>
+                    <div style="margin-top:0.5rem">
+                        ${linked.map(m => {
+                            const u = this.users.find(u => u.uid === m.userId);
+                            return `<div class="mig-link-row linked">
+                                <div>
+                                    <strong>${escapeHtml(m.name)}</strong>${m.shift?` <span class="chip chip-shift">T${m.shift}</span>`:''}<br>
+                                    <span class="text-sm text-gray">${u ? escapeHtml(u.email) : 'Account collegato'}</span>
+                                </div>
+                                <button class="btn btn-gray btn-sm" onclick="App.unlinkMember('${m.id}')">Scollega</button>
+                            </div>`;
+                        }).join('')}
+                    </div>
+                </details>` : ''}
+        `;
+    },
