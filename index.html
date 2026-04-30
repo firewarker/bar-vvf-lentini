@@ -597,6 +597,11 @@ const App = {
             usersRef.on('value', snap => {
                 this.users = [];
                 snap.forEach(c => this.users.push({ uid: c.key, ...c.val() }));
+                // Re-render solo se siamo già su tab che usa users
+                if (['admin','vigili','turni'].includes(this.tab)) this.render();
+            });
+            // Fetch immediato per popolare this.users subito (non aspettare il listener)
+            this._fetchUsers().then(() => {
                 if (['admin','vigili','turni'].includes(this.tab)) this.render();
             });
             this.listeners.push(() => usersRef.off());
@@ -792,7 +797,40 @@ const App = {
         ).join('');
     },
 
-    switchTab(t) { this.tab = t; this.renderTabs(); this.renderContent(); },
+    // Fetch SEMPRE fresco utenti dal DB (risolve timing con Firebase listener)
+    async _fetchUsers() {
+        try {
+            const snap = await db.ref('users').once('value');
+            this.users = [];
+            snap.forEach(c => this.users.push({ uid: c.key, ...c.val() }));
+        } catch(e) { console.error('Fetch users error:', e); }
+    },
+
+    async switchTab(t) {
+        this.tab = t;
+        this.renderTabs();
+        // Per tab che usano this.users, forza fetch fresco prima di renderizzare
+        if (Auth.isAdmin() && ['admin','vigili','turni'].includes(t)) {
+            document.getElementById('content').innerHTML =
+                '<p class="text-center text-gray" style="padding:2rem">⏳ Caricamento utenti...</p>';
+            await this._fetchUsers();
+        }
+        this.renderContent();
+    },
+
+    // Handler async per i sotto-tab admin (sostituisce renderContent() inline)
+    async setAdminTab(tab) {
+        this._adminTab = tab;
+        if (Auth.isAdmin()) await this._fetchUsers();
+        this.renderContent();
+    },
+
+    // Handler async per i sotto-tab turni
+    async setTurniTab(tab) {
+        this._turniTab = tab;
+        if (Auth.isAdmin() && tab === 'assign') await this._fetchUsers();
+        this.renderContent();
+    },
 
     renderContent() {
         const fn = 'page_' + this.tab;
@@ -1897,9 +1935,9 @@ const App = {
         return `
             <h2>🕐 Gestione Turni</h2>
             <div class="flex mb-2" style="flex-wrap:wrap">
-                <button class="btn ${this._turniTab==='overview'?'btn-red':'btn-gray'} btn-sm" onclick="App._turniTab='overview';App.renderContent()">📊 Riepilogo</button>
-                <button class="btn ${this._turniTab==='assign'?'btn-red':'btn-gray'} btn-sm" onclick="App._turniTab='assign';App.renderContent()">👥 Assegna Vigili</button>
-                <button class="btn ${this._turniTab==='coffee'?'btn-red':'btn-gray'} btn-sm" onclick="App._turniTab='coffee';App.renderContent()">☕ Distribuisci Caffè</button>
+                <button class="btn ${this._turniTab==='overview'?'btn-red':'btn-gray'} btn-sm" onclick="App.setTurniTab('overview')">📊 Riepilogo</button>
+                <button class="btn ${this._turniTab==='assign'?'btn-red':'btn-gray'} btn-sm" onclick="App.setTurniTab('assign')">👥 Assegna Vigili</button>
+                <button class="btn ${this._turniTab==='coffee'?'btn-red':'btn-gray'} btn-sm" onclick="App.setTurniTab('coffee')">☕ Distribuisci Caffè</button>
             </div>
             ${this._turniTab === 'overview' ? this._turniOverview() : ''}
             ${this._turniTab === 'assign' ? this._turniAssign() : ''}
@@ -2112,8 +2150,8 @@ const App = {
         if (!Auth.isSuperAdmin()) return '<p>Accesso negato</p>';
         return `
             <div class="flex mb-2">
-                <button class="btn ${this._adminTab==='ruoli'?'btn-red':'btn-gray'}" style="flex:1" onclick="App._adminTab='ruoli';App.renderContent()">👑 Ruoli</button>
-                <button class="btn ${this._adminTab==='migrazione'?'btn-red':'btn-gray'}" style="flex:1" onclick="App._adminTab='migrazione';App.renderContent()">🔄 Migrazione</button>
+                <button class="btn ${this._adminTab==='ruoli'?'btn-red':'btn-gray'}" style="flex:1" onclick="App.setAdminTab('ruoli')">👑 Ruoli</button>
+                <button class="btn ${this._adminTab==='migrazione'?'btn-red':'btn-gray'}" style="flex:1" onclick="App.setAdminTab('migrazione')">🔄 Migrazione</button>
             </div>
             ${this._adminTab === 'ruoli' ? this._adminRuoli() : this._adminMigrazione()}`;
     },
