@@ -821,14 +821,25 @@ const App = {
     // Handler async per i sotto-tab admin (sostituisce renderContent() inline)
     async setAdminTab(tab) {
         this._adminTab = tab;
-        if (Auth.isAdmin()) await this._fetchUsers();
-        this.renderContent();
+        // Aggiorna aspetto pulsanti subito
+        document.querySelectorAll('.admin-tab-btn').forEach(btn => {
+            btn.className = `btn admin-tab-btn ${btn.dataset.tab === tab ? 'btn-red' : 'btn-gray'}`;
+            btn.style.flex = '1';
+        });
+        const el = document.getElementById('admin-dyn');
+        if (el) el.innerHTML = '<p class="text-center text-gray" style="padding:1rem">⏳ Caricamento...</p>';
+        // Fetch fresco dal DB
+        const snap = await db.ref('users').once('value');
+        this.users = [];
+        snap.forEach(c => this.users.push({ uid: c.key, ...c.val() }));
+        if (el && this.tab === 'admin') {
+            el.innerHTML = tab === 'ruoli' ? this._adminRuoli() : this._adminMigrazione();
+        }
     },
 
     // Handler async per i sotto-tab turni
-    async setTurniTab(tab) {
+    setTurniTab(tab) {
         this._turniTab = tab;
-        if (Auth.isAdmin() && tab === 'assign') await this._fetchUsers();
         this.renderContent();
     },
 
@@ -1940,7 +1951,7 @@ const App = {
                 <button class="btn ${this._turniTab==='coffee'?'btn-red':'btn-gray'} btn-sm" onclick="App.setTurniTab('coffee')">☕ Distribuisci Caffè</button>
             </div>
             ${this._turniTab === 'overview' ? this._turniOverview() : ''}
-            ${this._turniTab === 'assign' ? this._turniAssign() : ''}
+            ${this._turniTab === 'assign' ? this._turniAssignShell() : ''}
             ${this._turniTab === 'coffee' ? this._turniCoffee() : ''}
         `;
     },
@@ -1984,6 +1995,21 @@ const App = {
                 </div>
             `;
         }).join('');
+    },
+
+    // Shell: lancia fetch async poi inietta il vero contenuto
+    _turniAssignShell() {
+        db.ref('users').once('value', snap => {
+            this.users = [];
+            snap.forEach(c => this.users.push({ uid: c.key, ...c.val() }));
+            const el = document.getElementById('turni-assign-dyn');
+            if (el && this.tab === 'turni' && this._turniTab === 'assign') {
+                el.innerHTML = this._turniAssign();
+            }
+        });
+        return `<div id="turni-assign-dyn">
+            <p class="text-center text-gray" style="padding:2rem">⏳ Caricamento...</p>
+        </div>`;
     },
 
     _turniAssign() {
@@ -2148,12 +2174,25 @@ const App = {
     _adminTab: 'ruoli',
     page_admin() {
         if (!Auth.isSuperAdmin()) return '<p>Accesso negato</p>';
+        // Fetch utenti direttamente da Firebase e aggiorna il DOM quando arrivano
+        db.ref('users').once('value', snap => {
+            this.users = [];
+            snap.forEach(c => this.users.push({ uid: c.key, ...c.val() }));
+            const el = document.getElementById('admin-dyn');
+            if (el && this.tab === 'admin') {
+                el.innerHTML = this._adminTab === 'ruoli'
+                    ? this._adminRuoli()
+                    : this._adminMigrazione();
+            }
+        });
         return `
             <div class="flex mb-2">
-                <button class="btn ${this._adminTab==='ruoli'?'btn-red':'btn-gray'}" style="flex:1" onclick="App.setAdminTab('ruoli')">👑 Ruoli</button>
-                <button class="btn ${this._adminTab==='migrazione'?'btn-red':'btn-gray'}" style="flex:1" onclick="App.setAdminTab('migrazione')">🔄 Migrazione</button>
+                <button class="btn admin-tab-btn ${this._adminTab==='ruoli'?'btn-red':'btn-gray'}" data-tab="ruoli" style="flex:1" onclick="App.setAdminTab('ruoli')">👑 Ruoli</button>
+                <button class="btn admin-tab-btn ${this._adminTab==='migrazione'?'btn-red':'btn-gray'}" data-tab="migrazione" style="flex:1" onclick="App.setAdminTab('migrazione')">🔄 Migrazione</button>
             </div>
-            ${this._adminTab === 'ruoli' ? this._adminRuoli() : this._adminMigrazione()}`;
+            <div id="admin-dyn">
+                <p class="text-center text-gray" style="padding:2rem">⏳ Caricamento utenti...</p>
+            </div>`;
     },
 
     _adminRuoli() {
