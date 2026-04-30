@@ -1859,78 +1859,33 @@ const App = {
         const m = this.members.find(x=>x.id===memberId);
         if (!m) return;
 
-        // Fetch SEMPRE fresco dal DB per sicurezza
-        let allUsers = [];
         try {
             const snap = await db.ref('users').once('value');
-            snap.forEach(c => allUsers.push({ uid: c.key, ...c.val() }));
-            this.users = allUsers;
+            this.users = [];
+            snap.forEach(c => this.users.push({ uid: c.key, ...c.val() }));
         } catch(e) {
-            console.error('Errore fetch utenti:', e);
-            allUsers = [...this.users];
+            console.error('Errore fetch users modalLink:', e);
         }
 
-        // Utenti liberi (non collegati ad alcun membro)
-        const unlinked = allUsers.filter(u => !this.members.some(mem => mem.userId === u.uid));
-        // Utenti già collegati ad altri membri
-        const alreadyLinked = allUsers.filter(u =>
-            this.members.some(mem => mem.userId === u.uid && mem.id !== memberId)
-        );
+        const available = this.users
+            .filter(u => !this.members.some(mem => mem.userId === u.uid))
+            .sort((a,b) => (a.name || '').localeCompare(b.name || '', 'it'));
 
-        let bodyHtml = `<p class="text-sm text-gray mb-1">Collega un account registrato a questo vigile.</p>`;
-
-        if (unlinked.length === 0) {
-            bodyHtml += `<div class="alert alert-warn">
-                <strong>Nessun account libero</strong> (${allUsers.length} totali nel DB).<br>
-                ${allUsers.length === 0
-                    ? '<span style="color:#991b1b">⚠️ Nessun utente si è ancora registrato nell\'app.</span>'
-                    : alreadyLinked.length > 0
-                        ? `Tutti gli account sono già collegati ad altri vigili:<br>
-                           <span class="text-sm">${alreadyLinked.map(u => {
-                               const lm = this.members.find(mem => mem.userId === u.uid);
-                               return escapeHtml(u.name) + ' → ' + (lm ? escapeHtml(lm.name) : '?');
-                           }).join(', ')}</span>`
-                        : 'Nessun account trovato per il collegamento.'
-                }
-            </div>`;
-
-            // Opzione forzatura se ci sono utenti già linkati altrove
-            if (alreadyLinked.length > 0) {
-                bodyHtml += `
-                <details style="margin-top:0.5rem">
-                    <summary class="text-sm" style="cursor:pointer;color:#dc2626;font-weight:600">
-                        ↩️ Forza collegamento (riassegna da altro vigile)
-                    </summary>
-                    <div class="form-group" style="margin-top:0.5rem">
-                        <select id="link-uid">
-                            <option value="">-- Seleziona --</option>
-                            ${alreadyLinked.map(u => {
-                                const lm = this.members.find(mem => mem.userId === u.uid);
-                                return `<option value="${u.uid}">${escapeHtml(u.name)} (ora collegato a: ${lm ? escapeHtml(lm.name) : '?'})</option>`;
-                            }).join('')}
-                        </select>
-                    </div>
-                    <button class="btn btn-orange btn-full" onclick="App.doLink('${memberId}')">Forza Collegamento</button>
-                </details>`;
-            }
-        } else {
-            bodyHtml += `
-            <div class="form-group">
-                <label>Seleziona account (${unlinked.length} disponibili)</label>
-                <select id="link-uid">
-                    <option value="">-- Seleziona --</option>
-                    ${unlinked.map(u =>
-                        `<option value="${u.uid}">${escapeHtml(u.name)} (${escapeHtml(u.email)})${u.shift ? ' [T' + u.shift + ']' : ''}${u.role === 'super_admin' ? ' 👑' : u.role === 'admin' ? ' 🔧' : ''}</option>`
-                    ).join('')}
-                </select>
-            </div>
-            <div class="alert alert-info text-sm">Il turno del vigile verrà allineato a quello dell'account selezionato.</div>
-            <button class="btn btn-red btn-full" onclick="App.doLink('${memberId}')">Collega</button>`;
-        }
-
-        modal(`🔗 Collega: ${escapeHtml(m.name)}`, bodyHtml);
+        modal(`🔗 Collega: ${escapeHtml(m.name)}`, `
+            <p class="text-sm text-gray mb-1">Scegli uno degli account presenti in <code>/users</code> del database.</p>
+            <div class="alert alert-info">Account liberi trovati nel DB: <strong>${available.length}</strong></div>
+            ${available.length === 0 ? '<div class="alert alert-warn">Nessun account libero disponibile nel database.</div>' : `
+                <div class="form-group"><label>Seleziona utente (${available.length} disponibili)</label>
+                    <select id="link-uid">
+                        <option value="">-- Seleziona --</option>
+                        ${available.map(u => `<option value="${u.uid}">${escapeHtml(u.name || '(senza nome)')} (${escapeHtml(u.email || '')})${u.shift?' [T'+u.shift+']':''}${u.role==='super_admin'?' 👑':u.role==='admin'?' 🔧':''}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="alert alert-info text-sm">Il turno del vigile verrà allineato a quello dell'account selezionato, se presente.</div>
+                <button class="btn btn-red btn-full" onclick="App.doLink('${memberId}')">Collega</button>
+            `}
+        `);
     },
-
     async doLink(memberId) {
         const userId = document.getElementById('link-uid').value;
         if (!userId) { alert('Seleziona un utente'); return; }
@@ -2176,6 +2131,115 @@ const App = {
     },
 
     // ---- ADMIN (super_admin) ----
+
+    _dbUsersSorted() {
+        return [...this.users].sort((a,b) => {
+            const an = (a.name || '').toLowerCase();
+            const bn = (b.name || '').toLowerCase();
+            return an.localeCompare(bn, 'it');
+        });
+    },
+
+    _linkedMemberForUser(uid) {
+        return this.members.find(m => m.userId === uid) || null;
+    },
+
+    _unlinkedMembers() {
+        return this.members.filter(m => !m.userId).sort((a,b) => a.name.localeCompare(b.name, 'it'));
+    },
+
+    _dbUsersPanel() {
+        const users = this._dbUsersSorted();
+        const linked = users.filter(u => this._linkedMemberForUser(u.uid));
+        const free = users.filter(u => !this._linkedMemberForUser(u.uid));
+
+        return `
+            <div class="divider"></div>
+            <h3>🗂️ Utenti nel database (${users.length})</h3>
+            <div class="alert alert-info">
+                Qui vedi <strong>tutti</strong> i record presenti in <code>/users</code> del Realtime Database. Gli utenti che compaiono qui sono quelli che l'app può collegare ai vigili.
+            </div>
+
+            <div class="stats-row">
+                <div class="stat-card"><div class="label">Totali DB</div><div class="value">${users.length}</div></div>
+                <div class="stat-card"><div class="label">Già collegati</div><div class="value">${linked.length}</div></div>
+                <div class="stat-card"><div class="label">Liberi</div><div class="value">${free.length}</div></div>
+                <div class="stat-card"><div class="label">Vigili liberi</div><div class="value">${this._unlinkedMembers().length}</div></div>
+            </div>
+
+            ${users.length === 0 ? '<div class="alert alert-warn">Nessun record presente in /users.</div>' : users.map(u => {
+                const linkedMember = this._linkedMemberForUser(u.uid);
+                return `
+                    <div class="member-item ${linkedMember ? '' : 'no-shift'}">
+                        <div style="flex:1;min-width:0">
+                            <strong>${escapeHtml(u.name || '(senza nome)')}</strong>
+                            ${u.shift ? `<span class="chip chip-shift" style="margin-left:0.3rem">T${u.shift}</span>` : ''}
+                            ${u.role === 'super_admin' ? '<span class="chip chip-green" style="margin-left:0.3rem">Gestore</span>' : ''}
+                            ${u.role === 'admin' ? '<span class="chip chip-blue" style="margin-left:0.3rem">Admin</span>' : ''}
+                            ${u.role === 'user' ? '<span class="chip chip-gray" style="margin-left:0.3rem">User</span>' : ''}
+                            <br><span class="text-sm text-gray">${escapeHtml(u.email || '')}</span>
+                            <br><span class="text-sm ${linkedMember ? 'text-gray' : ''}" style="color:${linkedMember ? '#6b7280' : '#dc2626'}">
+                                ${linkedMember ? 'Collegato a: ' + escapeHtml(linkedMember.name) : 'Non collegato a nessun vigile'}
+                            </span>
+                        </div>
+                        <div style="display:flex;gap:0.35rem;flex-wrap:wrap;justify-content:flex-end">
+                            ${linkedMember
+                                ? `<button class="btn btn-gray btn-sm" onclick="App.unlinkUser('${u.uid}')">Scollega</button>`
+                                : `<button class="btn btn-red btn-sm" onclick="App.openUserLinker('${u.uid}')">Collega a vigile</button>`}
+                        </div>
+                    </div>`;
+            }).join('')}
+        `;
+    },
+
+    openUserLinker(uid) {
+        const u = this.users.find(x => x.uid === uid);
+        if (!u) return alert('Utente non trovato nel database');
+        const freeMembers = this._unlinkedMembers();
+        modal(`🔗 Collega utente: ${escapeHtml(u.name || u.email)}`, `
+            <div class="alert alert-info">
+                <strong>${escapeHtml(u.name || '(senza nome)')}</strong><br>
+                <span class="text-sm text-gray">${escapeHtml(u.email || '')}</span>
+                ${u.shift ? `<br><span class="text-sm">Turno account: <strong>${u.shift}</strong></span>` : ''}
+            </div>
+            ${freeMembers.length === 0 ? '<div class="alert alert-warn">Non ci sono vigili liberi da collegare.</div>' : `
+                <div class="form-group">
+                    <label>Seleziona il vigile</label>
+                    <select id="manual-link-member">
+                        <option value="">-- Seleziona vigile --</option>
+                        ${freeMembers.map(m => `<option value="${m.id}">${escapeHtml(m.name)}${m.shift ? ' [T'+m.shift+']' : ''}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="alert alert-info text-sm">Il turno del vigile verrà allineato al turno dell'account, se presente.</div>
+                <button class="btn btn-red btn-full" onclick="App.linkUserToMember('${uid}')">Conferma collegamento</button>
+            `}
+        `);
+    },
+
+    async linkUserToMember(uid) {
+        const memberId = document.getElementById('manual-link-member').value;
+        if (!memberId) return alert('Seleziona un vigile');
+        const m = this.members.find(x => x.id === memberId);
+        const u = this.users.find(x => x.uid === uid);
+        if (!m || !u) return alert('Dati non trovati');
+        m.userId = uid;
+        if (u.shift) m.shift = u.shift;
+        await this.save();
+        modalClose();
+        this.render();
+        alert('✅ Utente collegato correttamente');
+    },
+
+    async unlinkUser(uid) {
+        const m = this.members.find(x => x.userId === uid);
+        if (!m) return alert('Collegamento non trovato');
+        if (!confirm(`Scollegare ${m.name} dall'account?`)) return;
+        delete m.userId;
+        await this.save();
+        this.render();
+        alert('✅ Collegamento rimosso');
+    },
+
     _adminTab: 'ruoli',
 
     page_admin() {
@@ -2387,4 +2451,118 @@ fbAuth.onAuthStateChanged(user => {
 });
 </script>
 </body>
-</html>
+</html>    _adminRuoli() {
+        const admins = this.users.filter(u => u.role === 'admin');
+        const regulars = this.users.filter(u => u.role === 'user');
+        const supers = this.users.filter(u => u.role === 'super_admin');
+
+        return `
+            <h2>👑 Gestione Ruoli</h2>
+            <div class="alert alert-info">Questa sezione mostra i ruoli dei record presenti in <code>/users</code> del Realtime Database. Solo questi account sono gestibili dall'app.</div>
+
+            <h3>👑 Gestore</h3>
+            ${supers.length===0?'<p class="text-gray text-sm">Nessun gestore nel database</p>':
+                supers.map(u => `<div class="member-item"><div><strong>${escapeHtml(u.name)}</strong>${u.shift?` <span class="chip chip-shift">T${u.shift}</span>`:''}<br><span class="text-sm text-gray">${escapeHtml(u.email)}</span></div><span class="chip chip-green">Gestore</span></div>`).join('')}
+
+            <h3 style="margin-top:1rem">🔧 Amministratori (${admins.length}/8)</h3>
+            ${admins.length===0?'<p class="text-gray text-sm">Nessun amministratore nominato</p>':
+                admins.map(u=>`
+                    <div class="member-item">
+                        <div><strong>${escapeHtml(u.name)}</strong>${u.shift?` <span class="chip chip-shift">T${u.shift}</span>`:''}<br><span class="text-sm text-gray">${escapeHtml(u.email)}</span></div>
+                        <button class="btn btn-orange btn-sm" onclick="App.removeAdmin('${u.uid}')">Rimuovi Admin</button>
+                    </div>`).join('')}
+
+            <h3 style="margin-top:1rem">👤 Utenti normali (${regulars.length})</h3>
+            ${regulars.length===0?'<p class="text-gray text-sm">Nessun utente registrato nel database</p>':
+                regulars.map(u=>`
+                    <div class="member-item">
+                        <div><strong>${escapeHtml(u.name)}</strong>${u.shift?` <span class="chip chip-shift">T${u.shift}</span>`:''}<br><span class="text-sm text-gray">${escapeHtml(u.email)}</span></div>
+                        <button class="btn btn-green btn-sm" ${admins.length>=8?'disabled title="Massimo 8 admin"':''} onclick="App.makeAdmin('${u.uid}')">Nomina Admin</button>
+                    </div>`).join('')}
+
+            ${this._dbUsersPanel()}`;
+    },    _adminMigrazione() {
+        const total = this.members.length;
+        const linked = this.members.filter(m => m.userId);
+        const unlinked = this.members.filter(m => !m.userId);
+        const linkedCount = linked.length;
+        const pct = total > 0 ? Math.round((linkedCount / total) * 100) : 0;
+
+        const availableUsers = this.users.filter(u =>
+            !this.members.some(m => m.userId === u.uid)
+        ).sort((a,b) => (a.name || '').localeCompare(b.name || '', 'it'));
+
+        return `
+            <h2>🔄 Migrazione Account</h2>
+            <div class="alert alert-info">
+                Questa sezione usa i record presenti in <code>/users</code> del Realtime Database, non l'elenco Firebase Authentication. Gli account visibili qui sono quelli realmente collegabili dall'app.
+            </div>
+
+            <div style="margin-bottom:1.5rem">
+                <div class="flex-between text-sm" style="font-weight:600">
+                    <span>Progresso migrazione</span>
+                    <span>${linkedCount}/${total} vigili collegati</span>
+                </div>
+                <div class="mig-progress">
+                    <div class="mig-progress-bar" style="width:${pct}%"></div>
+                    <div class="mig-progress-text">${pct}%</div>
+                </div>
+            </div>
+
+            <div class="alert alert-info">
+                <strong>Account nel DB liberi da collegare:</strong> ${availableUsers.length}<br>
+                <strong>Vigili ancora da collegare:</strong> ${unlinked.length}
+            </div>
+
+            <h3>⚡ Collegamento rapido</h3>
+            ${unlinked.length === 0 ? '<div class="alert alert-ok">✅ Tutti i vigili sono collegati!</div>' :
+                availableUsers.length === 0 ? '<div class="alert alert-warn">Nessun account libero in /users da collegare.</div>' : `
+                <p class="text-sm text-gray mb-1">Suggerimenti automatici basati sul nome:</p>
+                ${unlinked.map(m => {
+                    const matches = this._findMatches(m, availableUsers);
+                    return `<div class="member-item ${(m.balance||0)>0?'has-debt':''}">
+                        <div>
+                            <strong>${escapeHtml(m.name)}</strong>${m.shift?` <span class="chip chip-shift">T${m.shift}</span>`:''}
+                            ${(m.balance||0)>0?`<br><span class="text-sm" style="color:#dc2626">Debito attuale: €${m.balance.toFixed(2)}</span>`:''}
+                        </div>
+                        <div style="text-align:right">
+                            ${matches.length > 0 ? matches.slice(0,3).map(u => `
+                                <button class="btn btn-blue btn-sm" style="margin:0.1rem" onclick="App.confirmLink('${m.id}','${u.uid}')" title="${escapeAttr(u.email)}">→ ${escapeHtml((u.name||u.email).split(' ')[0])}</button>
+                            `).join('') : ''}
+                            <button class="btn btn-red btn-sm" onclick="App.modalLink('${m.id}')">📋 Tutti gli account DB</button>
+                        </div>
+                    </div>`;
+                }).join('')}
+            `}
+
+            <div class="divider"></div>
+            <h3>🗂️ Tutti gli account del database non ancora collegati (${availableUsers.length})</h3>
+            ${availableUsers.length === 0 ? '<p class="text-gray text-sm">Nessun account libero.</p>' : availableUsers.map(u => `
+                <div class="member-item">
+                    <div>
+                        <strong>${escapeHtml(u.name || '(senza nome)')}</strong>${u.shift?` <span class="chip chip-shift">T${u.shift}</span>`:''}<br>
+                        <span class="text-sm text-gray">${escapeHtml(u.email || '')}</span>
+                    </div>
+                    <button class="btn btn-red btn-sm" onclick="App.openUserLinker('${u.uid}')">Collega manualmente</button>
+                </div>
+            `).join('')}
+
+            ${linked.length > 0 ? `
+                <div class="divider"></div>
+                <details>
+                    <summary style="cursor:pointer;font-weight:600;color:#16a34a">✅ Già collegati (${linkedCount})</summary>
+                    <div style="margin-top:0.5rem">
+                        ${linked.map(m => {
+                            const u = this.users.find(u => u.uid === m.userId);
+                            return `<div class="mig-link-row linked">
+                                <div>
+                                    <strong>${escapeHtml(m.name)}</strong>${m.shift?` <span class="chip chip-shift">T${m.shift}</span>`:''}<br>
+                                    <span class="text-sm text-gray">${u ? escapeHtml(u.email) : 'Account collegato'}</span>
+                                </div>
+                                <button class="btn btn-gray btn-sm" onclick="App.unlinkMember('${m.id}')">Scollega</button>
+                            </div>`;
+                        }).join('')}
+                    </div>
+                </details>` : ''}
+        `;
+    },
