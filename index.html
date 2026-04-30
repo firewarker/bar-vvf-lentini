@@ -9,782 +9,1955 @@
     <meta name="apple-mobile-web-app-title" content="Bar VVF">
     <title>Bar VVF Lentini</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚒</text></svg>">
-    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' fill='%23dc2626' rx='48'/><text x='96' y='145' font-size='120' text-anchor='middle' fill='white'>🚒</text></svg>">
-    <link rel="manifest" href="manifest.json">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; background: linear-gradient(135deg, #fee2e2 0%, #fed7aa 100%); min-height: 100vh; padding: 1rem; }
-        .container { max-w: 1200px; margin: 0 auto; }
-        .header { background: #dc2626; color: white; padding: 1.5rem; border-radius: 0.5rem 0.5rem 0 0; box-shadow: 0 4px 6px rgba(0,0,0,0.1); position: relative; }
-        .header h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
-        .header p { font-size: 0.875rem; opacity: 0.9; }
-        .sync-indicator { position: absolute; top: 1rem; right: 1rem; display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem; background: rgba(255,255,255,0.2); padding: 0.5rem 0.75rem; border-radius: 0.375rem; }
-        .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: #10b981; animation: pulse 2s infinite; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-        .sync-dot.syncing { background: #f59e0b; animation: spin 1s linear infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.5rem; margin-top: 1rem; }
-        .stat { background: rgba(255,255,255,0.2); padding: 0.75rem; border-radius: 0.375rem; }
-        .stat-label { font-size: 0.75rem; margin-bottom: 0.25rem; }
-        .stat-value { font-size: 1.5rem; font-weight: bold; }
-        .tabs { background: white; display: flex; border-bottom: 2px solid #e5e7eb; }
-        .tab { flex: 1; padding: 1rem 0.5rem; text-align: center; font-weight: 600; cursor: pointer; border: none; background: #f3f4f6; color: #6b7280; font-size: 0.875rem; }
+        body { font-family: Arial, sans-serif; background: linear-gradient(135deg, #fee2e2 0%, #fed7aa 100%); min-height: 100vh; }
+
+        /* ===== LOGIN ===== */
+        .login-wrap { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 1rem; }
+        .login-box { background: white; border-radius: 0.75rem; padding: 2rem; max-width: 420px; width: 100%; box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
+        .login-box h1 { color: #dc2626; text-align: center; margin-bottom: 0.25rem; }
+        .login-box .subtitle { text-align: center; color: #6b7280; font-size: 0.875rem; margin-bottom: 1.5rem; }
+        .login-box .emoji { text-align: center; font-size: 3rem; margin-bottom: 0.5rem; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; font-size: 0.8rem; font-weight: 600; color: #374151; margin-bottom: 0.25rem; }
+        .form-group input, .form-group select { width: 100%; padding: 0.75rem; border: 2px solid #e5e7eb; border-radius: 0.375rem; font-size: 0.9rem; background: white; }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: #dc2626; }
+        .login-btn { width: 100%; padding: 0.85rem; border: none; border-radius: 0.375rem; font-weight: 700; cursor: pointer; font-size: 0.95rem; margin-bottom: 0.5rem; }
+        .login-btn.primary { background: #dc2626; color: white; }
+        .login-btn.primary:hover { background: #b91c1c; }
+        .login-error { background: #fee2e2; color: #dc2626; padding: 0.75rem; border-radius: 0.375rem; margin-bottom: 1rem; font-size: 0.85rem; text-align: center; }
+        .login-toggle { text-align: center; margin-top: 1rem; font-size: 0.85rem; color: #6b7280; }
+        .login-toggle a { color: #dc2626; cursor: pointer; font-weight: 600; text-decoration: none; }
+
+        .shift-picker { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.4rem; }
+        .shift-opt { padding: 0.85rem 0.25rem; border: 2px solid #e5e7eb; border-radius: 0.375rem; text-align: center; font-weight: 700; font-size: 1.1rem; cursor: pointer; background: white; transition: 0.15s; user-select: none; }
+        .shift-opt.selected { border-color: #dc2626; background: #fee2e2; color: #dc2626; }
+        .shift-opt:hover:not(.selected) { border-color: #fca5a5; }
+
+        /* ===== APP ===== */
+        .app-container { max-width: 900px; margin: 0 auto; padding: 0.75rem; }
+        .header { background: #dc2626; color: white; padding: 1.25rem; border-radius: 0.75rem 0.75rem 0 0; position: relative; }
+        .header h1 { font-size: 1.35rem; margin-bottom: 0.15rem; }
+        .header .user-line { font-size: 0.8rem; opacity: 0.9; }
+        .header-actions { position: absolute; top: 1rem; right: 1rem; display: flex; gap: 0.5rem; }
+        .header-actions button { background: rgba(255,255,255,0.2); border: none; color: white; padding: 0.4rem 0.75rem; border-radius: 0.375rem; font-size: 0.75rem; cursor: pointer; font-weight: 600; }
+        .header-actions button:hover { background: rgba(255,255,255,0.35); }
+        .badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 1rem; font-size: 0.65rem; font-weight: 700; vertical-align: middle; margin-left: 0.35rem; }
+        .badge-super { background: #fef3c7; color: #78350f; }
+        .badge-admin { background: #dbeafe; color: #1e40af; }
+        .badge-user { background: rgba(255,255,255,0.25); color: white; }
+        .badge-shift { background: rgba(255,255,255,0.3); color: white; font-weight: 800; padding: 0.15rem 0.55rem; }
+
+        .sync-bar { background: white; padding: 0.4rem 1.25rem; display: flex; align-items: center; gap: 0.5rem; font-size: 0.7rem; color: #6b7280; border-bottom: 1px solid #e5e7eb; }
+        .sync-dot { width: 7px; height: 7px; border-radius: 50%; background: #10b981; flex-shrink: 0; }
+        .sync-dot.off { background: #ef4444; }
+
+        .tabs { background: white; display: flex; border-bottom: 2px solid #e5e7eb; overflow-x: auto; }
+        .tab { flex: 1; padding: 0.75rem 0.25rem; text-align: center; font-weight: 600; cursor: pointer; border: none; background: #f9fafb; color: #6b7280; font-size: 0.75rem; white-space: nowrap; transition: 0.15s; min-width: 0; }
         .tab.active { background: #dc2626; color: white; }
-        .content { background: white; padding: 1.5rem; border-radius: 0 0 0.5rem 0.5rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1); min-height: 400px; }
-        .btn { padding: 0.75rem 1.5rem; border: none; border-radius: 0.375rem; font-weight: 600; cursor: pointer; font-size: 0.875rem; }
-        .btn-primary { background: #dc2626; color: white; }
-        .btn-primary:hover { background: #b91c1c; }
-        .btn-success { background: #16a34a; color: white; }
-        .btn-success:hover { background: #15803d; }
-        .btn-warning { background: #ea580c; color: white; }
-        .btn-warning:hover { background: #c2410c; }
+        .tab:hover:not(.active) { background: #f3f4f6; }
+
+        .content { background: white; padding: 1.25rem; border-radius: 0 0 0.75rem 0.75rem; box-shadow: 0 4px 12px rgba(0,0,0,0.08); min-height: 350px; }
+
+        /* ===== COMMON ===== */
+        h2 { font-size: 1.3rem; margin-bottom: 1rem; }
+        h3 { font-size: 1rem; margin-bottom: 0.5rem; font-weight: 600; }
+        .btn { padding: 0.6rem 1rem; border: none; border-radius: 0.375rem; font-weight: 600; cursor: pointer; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 0.3rem; }
+        .btn-full { width: 100%; justify-content: center; }
+        .btn-red { background: #dc2626; color: white; }
+        .btn-red:hover { background: #b91c1c; }
+        .btn-green { background: #16a34a; color: white; }
+        .btn-green:hover { background: #15803d; }
+        .btn-orange { background: #ea580c; color: white; }
+        .btn-orange:hover { background: #c2410c; }
+        .btn-blue { background: #2563eb; color: white; }
+        .btn-blue:hover { background: #1d4ed8; }
         .btn-gray { background: #6b7280; color: white; }
         .btn-gray:hover { background: #4b5563; }
-        .btn-sm { padding: 0.5rem 1rem; font-size: 0.75rem; }
-        input, select { padding: 0.75rem; border: 2px solid #e5e7eb; border-radius: 0.375rem; font-size: 0.875rem; width: 100%; }
+        .btn-sm { padding: 0.4rem 0.65rem; font-size: 0.7rem; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        input, select { width: 100%; padding: 0.65rem; border: 2px solid #e5e7eb; border-radius: 0.375rem; font-size: 0.85rem; font-family: inherit; background: white; }
         input:focus, select:focus { outline: none; border-color: #dc2626; }
-        .grid { display: grid; gap: 1rem; }
-        .grid-2 { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
-        .grid-3 { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
-        .card { border: 2px solid #e5e7eb; border-radius: 0.5rem; padding: 1rem; }
-        .card-header { font-weight: 600; font-size: 1.125rem; margin-bottom: 0.5rem; }
-        .card-price { font-size: 1.5rem; font-weight: bold; color: #dc2626; margin: 0.5rem 0; }
-        .card-stock { font-size: 0.875rem; font-weight: 600; margin-bottom: 0.75rem; }
+
+        .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.5rem; margin-bottom: 1.25rem; }
+        .stat-card { background: #f9fafb; padding: 0.75rem; border-radius: 0.5rem; text-align: center; border: 1px solid #e5e7eb; }
+        .stat-card .label { font-size: 0.7rem; color: #6b7280; margin-bottom: 0.15rem; }
+        .stat-card .value { font-size: 1.5rem; font-weight: bold; }
+
+        .alert { padding: 0.85rem; border-radius: 0.375rem; margin-bottom: 1rem; font-size: 0.85rem; }
+        .alert-info { background: #dbeafe; color: #1e3a8a; border-left: 4px solid #3b82f6; }
+        .alert-warn { background: #fef3c7; color: #78350f; border-left: 4px solid #f59e0b; }
+        .alert-ok { background: #d1fae5; color: #065f46; border-left: 4px solid #10b981; }
+        .alert-danger { background: #fee2e2; color: #991b1b; border-left: 4px solid #ef4444; }
+
+        .product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 0.75rem; }
+        .p-card { border: 2px solid #e5e7eb; border-radius: 0.5rem; padding: 0.85rem; text-align: center; transition: 0.15s; }
+        .p-card:hover { border-color: #fca5a5; }
+        .p-card.coffee { border-color: #fbbf24; background: #fffbeb; }
+        .p-card.coffee:hover { border-color: #f59e0b; }
+        .p-card .name { font-weight: 600; margin-bottom: 0.2rem; }
+        .coffee-tag { display: inline-block; background: #f59e0b; color: white; font-size: 0.55rem; padding: 0.1rem 0.35rem; border-radius: 1rem; margin-left: 0.25rem; vertical-align: middle; font-weight: 700; }
+        .p-card .price { font-size: 1.3rem; font-weight: bold; color: #dc2626; }
+        .p-card .stock { font-size: 0.75rem; font-weight: 600; margin: 0.25rem 0 0.5rem; }
         .stock-ok { color: #16a34a; }
         .stock-low { color: #ea580c; }
         .stock-out { color: #dc2626; }
+
+        .shift-stock-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.25rem; margin: 0.4rem 0; font-size: 0.7rem; }
+        .shift-stock-cell { background: #f9fafb; padding: 0.3rem 0.15rem; border-radius: 0.25rem; border: 1px solid #e5e7eb; text-align: center; }
+        .shift-stock-cell.mine { background: #fef3c7; border-color: #fbbf24; }
+        .shift-stock-cell.disabled { opacity: 0.3; }
+        .shift-stock-cell .lbl { font-size: 0.6rem; color: #6b7280; font-weight: 700; }
+        .shift-stock-cell .val { font-weight: 700; font-size: 0.85rem; }
+
+        .tx-item { background: #f9fafb; padding: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.4rem; border-left: 4px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+        .tx-item.paid { border-left-color: #10b981; }
+        .tx-item.unpaid { border-left-color: #f59e0b; }
+        .tx-item.expense { border-left-color: #ef4444; }
+        .tx-item.carico { border-left-color: #3b82f6; }
+
+        .member-item { background: #f9fafb; padding: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.4rem; display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; border-left: 4px solid #3b82f6; }
+        .member-item.has-debt { border-left-color: #ef4444; }
+        .member-item.no-shift { border-left-color: #f59e0b; background: #fffbeb; }
+
+        .chip { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 1rem; font-size: 0.65rem; font-weight: 700; }
+        .chip-green { background: #d1fae5; color: #065f46; }
+        .chip-orange { background: #ffedd5; color: #9a3412; }
+        .chip-blue { background: #dbeafe; color: #1e40af; }
+        .chip-gray { background: #f3f4f6; color: #4b5563; }
+        .chip-shift { background: #fef3c7; color: #78350f; font-weight: 800; padding: 0.15rem 0.55rem; }
+
+        .divider { height: 1px; background: #e5e7eb; margin: 1.25rem 0; }
         .flex { display: flex; gap: 0.5rem; }
         .flex-between { display: flex; justify-content: space-between; align-items: center; }
+        .text-center { text-align: center; }
+        .text-gray { color: #6b7280; }
+        .text-sm { font-size: 0.8rem; }
         .mb-1 { margin-bottom: 0.5rem; }
         .mb-2 { margin-bottom: 1rem; }
-        .mb-4 { margin-bottom: 2rem; }
-        .text-center { text-align: center; }
-        .text-sm { font-size: 0.875rem; }
-        .text-gray { color: #6b7280; }
-        .alert { padding: 1rem; border-radius: 0.375rem; margin-bottom: 1rem; }
-        .alert-warning { background: #fef3c7; border: 2px solid #fbbf24; color: #78350f; }
-        .alert-success { background: #d1fae5; border: 2px solid #34d399; color: #065f46; }
-        .alert-info { background: #dbeafe; border: 2px solid #60a5fa; color: #1e3a8a; }
-        .bg-gray { background: #f9fafb; padding: 1rem; border-radius: 0.375rem; }
-        h2 { font-size: 1.5rem; margin-bottom: 1rem; }
-        h3 { font-size: 1.125rem; margin-bottom: 0.75rem; font-weight: 600; }
-        @media (max-width: 768px) {
-            .stats { grid-template-columns: repeat(2, 1fr); }
-            .tab { font-size: 0.75rem; padding: 0.75rem 0.25rem; }
-            .sync-indicator { font-size: 0.65rem; padding: 0.375rem 0.5rem; }
+        .hidden { display: none !important; }
+
+        .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 999; padding: 1rem; }
+        .modal { background: white; border-radius: 0.75rem; padding: 1.5rem; max-width: 480px; width: 100%; max-height: 85vh; overflow-y: auto; box-shadow: 0 12px 40px rgba(0,0,0,0.2); }
+        .modal h2 { font-size: 1.15rem; }
+
+        .header-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.4rem; margin-top: 0.75rem; }
+        .header-stat { background: rgba(255,255,255,0.15); padding: 0.5rem; border-radius: 0.375rem; text-align: center; }
+        .header-stat .hs-label { font-size: 0.65rem; opacity: 0.85; margin-bottom: 0.1rem; }
+        .header-stat .hs-value { font-size: 1.15rem; font-weight: bold; }
+
+        .toggle-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: #f9fafb; border-radius: 0.375rem; cursor: pointer; }
+        .toggle-row input[type=checkbox] { width: auto; }
+
+        .multi-shift-picker { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.4rem; }
+        .multi-shift-opt { padding: 0.7rem 0.25rem; border: 2px solid #e5e7eb; border-radius: 0.375rem; text-align: center; font-weight: 700; cursor: pointer; background: white; transition: 0.15s; user-select: none; }
+        .multi-shift-opt.selected { border-color: #f59e0b; background: #fef3c7; color: #92400e; }
+        .multi-shift-opt:hover:not(.selected) { border-color: #fcd34d; }
+
+        .split-preview { background: #eff6ff; border: 1px solid #93c5fd; border-radius: 0.375rem; padding: 0.75rem; margin: 0.5rem 0; }
+        .split-preview .row { display: flex; justify-content: space-between; padding: 0.2rem 0; }
+        .split-preview .row strong { color: #1e40af; }
+
+        /* Shift assignment grid */
+        .shift-assign-grid { display: grid; grid-template-columns: 1fr; gap: 0.4rem; margin: 0.5rem 0; }
+        .shift-assign-row { background: #f9fafb; padding: 0.6rem; border-radius: 0.375rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+        .shift-assign-row.no-shift { background: #fffbeb; border-left: 3px solid #f59e0b; }
+        .shift-assign-row .shift-buttons { display: flex; gap: 0.25rem; margin-left: auto; }
+        .shift-btn { padding: 0.35rem 0.65rem; border: 2px solid #e5e7eb; border-radius: 0.25rem; background: white; cursor: pointer; font-weight: 700; font-size: 0.8rem; transition: 0.15s; }
+        .shift-btn:hover { border-color: #fca5a5; }
+        .shift-btn.active { background: #dc2626; color: white; border-color: #dc2626; }
+
+        /* Migration panel */
+        .mig-progress { background: #f3f4f6; border-radius: 1rem; height: 1.5rem; overflow: hidden; margin: 0.75rem 0 1rem; position: relative; }
+        .mig-progress-bar { background: linear-gradient(90deg, #16a34a, #22c55e); height: 100%; border-radius: 1rem; transition: width 0.5s ease; min-width: 0; }
+        .mig-progress-text { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; color: #1f2937; }
+        .mig-link-row { display: flex; align-items: center; justify-content: space-between; padding: 0.5rem; border-radius: 0.375rem; margin-bottom: 0.35rem; background: #f9fafb; font-size: 0.85rem; }
+        .mig-link-row.linked { background: #ecfdf5; }
+
+        @media (max-width: 600px) {
+            .stats-row { grid-template-columns: repeat(2, 1fr); }
+            .product-grid { grid-template-columns: repeat(2, 1fr); }
+            .header h1 { font-size: 1.15rem; }
+            .header-stats { grid-template-columns: repeat(2, 1fr); }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>🚒 Bar VVF Lentini</h1>
-            <p>Sistema Gestione Condiviso - Sincronizzazione Cloud</p>
-            <div class="sync-indicator" id="sync-status">
-                <div class="sync-dot" id="sync-dot"></div>
-                <span id="sync-text">Connessione...</span>
-            </div>
-            <div class="stats" id="stats"></div>
-        </div>
-        
-        <div class="tabs" id="tabs"></div>
-        
-        <div class="content" id="content"></div>
-    </div>
 
-    <script>
-        const FIREBASE_URL = 'https://bar-vvf-lentini-default-rtdb.europe-west1.firebasedatabase.app';
-        
-        const app = {
-            data: {
-                members: [],
-                products: [],
-                transactions: [],
-                purchases: [],
-                cashRegister: 0,
-                activeTab: 'setup',
-                selectedMember: '',
-                lastSync: null,
-                syncing: false,
-                online: true
-            },
-            
-            async init() {
-                this.render();
-                await this.syncFromCloud();
-                setInterval(() => this.syncFromCloud(), 3000);
-            },
-            
-            async syncFromCloud() {
-                this.data.syncing = true;
-                this.updateSyncStatus();
-                
-                try {
-                    const response = await fetch(`${FIREBASE_URL}/bar-data.json`);
-                    
-                    if (response.ok) {
-                        const cloudData = await response.json();
-                        
-                        if (cloudData) {
-                            this.data.members = cloudData.members || [];
-                            this.data.products = cloudData.products || [];
-                            this.data.transactions = cloudData.transactions || [];
-                            this.data.purchases = cloudData.purchases || [];
-                            this.data.cashRegister = cloudData.cashRegister || 0;
-                            this.saveLocal();
-                        }
-                        
-                        this.data.online = true;
-                        this.data.lastSync = new Date();
-                    }
-                } catch (error) {
-                    console.log('Modalità offline');
-                    this.loadLocal();
-                    this.data.online = false;
-                }
-                
-                this.data.syncing = false;
-                this.updateSyncStatus();
-                
-                const activeElement = document.activeElement;
-                const isTyping = activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'SELECT');
-                
-                if (!isTyping) {
-                    this.render();
-                } else {
-                    this.renderStats();
-                }
-            },
-            
-            async saveToCloud() {
-                const dataToSave = {
-                    members: this.data.members,
-                    products: this.data.products,
-                    transactions: this.data.transactions,
-                    purchases: this.data.purchases,
-                    cashRegister: this.data.cashRegister,
-                    lastUpdate: new Date().toISOString()
-                };
-                
-                try {
-                    await fetch(`${FIREBASE_URL}/bar-data.json`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(dataToSave)
-                    });
-                    this.data.online = true;
-                    this.saveLocal();
-                    this.renderStats();
-                } catch (error) {
-                    console.log('Salvataggio locale');
-                    this.saveLocal();
-                    this.data.online = false;
-                }
-            },
-            
-            saveLocal() {
-                try {
-                    localStorage.setItem('vvf-data', JSON.stringify({
-                        members: this.data.members,
-                        products: this.data.products,
-                        transactions: this.data.transactions,
-                        purchases: this.data.purchases,
-                        cashRegister: this.data.cashRegister
-                    }));
-                } catch (e) {}
-            },
-            
-            loadLocal() {
-                try {
-                    const data = JSON.parse(localStorage.getItem('vvf-data') || '{}');
-                    this.data.members = data.members || [];
-                    this.data.products = data.products || [];
-                    this.data.transactions = data.transactions || [];
-                    this.data.purchases = data.purchases || [];
-                    this.data.cashRegister = data.cashRegister || 0;
-                } catch (e) {}
-            },
-            
-            updateSyncStatus() {
-                const dot = document.getElementById('sync-dot');
-                const text = document.getElementById('sync-text');
-                
-                if (!dot || !text) return;
-                
-                if (this.data.syncing) {
-                    dot.className = 'sync-dot syncing';
-                    text.textContent = 'Sincronizzazione...';
-                } else if (this.data.online) {
-                    dot.className = 'sync-dot';
-                    text.textContent = this.data.lastSync ? 'Online • ' + this.data.lastSync.toLocaleTimeString('it-IT') : 'Online';
-                } else {
-                    dot.style.background = '#ef4444';
-                    text.textContent = 'Offline';
-                }
-            },
-            
-            render() {
-                this.renderStats();
-                this.renderTabs();
-                this.renderContent();
-                this.updateSyncStatus();
-            },
-            
-            renderStats() {
-                const statsEl = document.getElementById('stats');
-                if (!statsEl) return;
-                
-                statsEl.innerHTML = `
-                    <div class="stat">
-                        <div class="stat-label">Cassa</div>
-                        <div class="stat-value">€${this.data.cashRegister.toFixed(2)}</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-label">Vigili</div>
-                        <div class="stat-value">${this.data.members.length}</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-label">Prodotti</div>
-                        <div class="stat-value">${this.data.products.length}</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-label">Crediti</div>
-                        <div class="stat-value">€${this.getTotalDebt().toFixed(2)}</div>
-                    </div>
-                `;
-            },
-            
-            renderTabs() {
-                const tabs = ['setup', 'vendita', 'magazzino', 'conti', 'cassa', 'vigili'];
-                document.getElementById('tabs').innerHTML = tabs.map(tab => 
-                    `<button class="tab ${this.data.activeTab === tab ? 'active' : ''}" onclick="app.switchTab('${tab}')">
-                        ${tab.charAt(0).toUpperCase() + tab.slice(1)}
-                    </button>`
-                ).join('');
-            },
-            
-            renderContent() {
-                const method = 'render' + this.data.activeTab.charAt(0).toUpperCase() + this.data.activeTab.slice(1);
-                document.getElementById('content').innerHTML = this[method]();
-            },
-            
-            switchTab(tab) {
-                this.data.activeTab = tab;
-                this.render();
-            },
-            
-            getTotalDebt() {
-                return this.data.members.reduce((sum, m) => sum + (m.balance || 0), 0);
-            },
-            
-            renderSetup() {
-                return `
-                    <h2>⚙️ Configurazione Iniziale</h2>
-                    
-                    ${!this.data.online ? 
-                        '<div class="alert alert-warning"><strong>⚠️ Modalità Offline</strong><br>I dati verranno sincronizzati quando tornerai online.</div>' : 
-                        '<div class="alert alert-info"><strong>☁️ Connesso al Cloud</strong><br>Tutti i dispositivi vedono gli stessi dati in tempo reale.</div>'
-                    }
-                    
-                    ${this.data.members.length > 0 && this.data.products.length > 0 ? 
-                        '<div class="alert alert-success"><strong>✅ Sistema configurato!</strong><br>Puoi usare le altre tab per gestire il bar.</div>' : 
-                        '<div class="alert alert-warning"><strong>⚠️ Configurazione necessaria</strong><br>Completa i passi sotto per iniziare.</div>'
-                    }
-                    
-                    <div class="grid grid-2">
-                        <div class="card">
-                            <h3>1️⃣ Cassa Iniziale</h3>
-                            <input type="number" id="cash-input" placeholder="Es: 50.00" value="${this.data.cashRegister}" class="mb-1">
-                            <button class="btn btn-success" onclick="app.setCash()" style="width:100%">Imposta Cassa</button>
-                        </div>
-                        
-                        <div class="card">
-                            <h3>2️⃣ Aggiungi Vigili (${this.data.members.length})</h3>
-                            <input type="text" id="member-input" placeholder="Nome Cognome" class="mb-1">
-                            <button class="btn btn-primary" onclick="app.addMember()" style="width:100%">Aggiungi Vigile</button>
-                        </div>
-                    </div>
-                    
-                    <div class="card mb-2">
-                        <h3>3️⃣ Aggiungi Prodotti (${this.data.products.length})</h3>
-                        <div class="flex mb-1">
-                            <input type="text" id="prod-name" placeholder="Nome" style="flex:2">
-                            <input type="number" id="prod-price" placeholder="€" step="0.10" style="flex:1">
-                            <input type="number" id="prod-stock" placeholder="Pz" style="flex:1">
-                        </div>
-                        <button class="btn btn-primary" onclick="app.addProduct()" style="width:100%">Aggiungi Prodotto</button>
-                    </div>
-                    
-                    ${this.data.members.length > 0 ? `
-                        <div class="card mb-2">
-                            <h3>👥 Vigili Inseriti (${this.data.members.length})</h3>
-                            <div class="grid grid-3">
-                                ${this.data.members.map(m => `
-                                    <div style="border:1px solid #e5e7eb;padding:0.75rem;border-radius:0.375rem">
-                                        <div style="margin-bottom:0.5rem">
-                                            <div style="font-weight:600">${m.name}</div>
-                                            ${m.balance > 0 ? `<div class="text-sm text-gray">Debito: €${m.balance.toFixed(2)}</div>` : ''}
-                                        </div>
-                                        <div class="flex">
-                                            <button onclick="app.editMember('${m.id}')" class="btn btn-gray btn-sm" style="flex:1">✏️</button>
-                                            <button onclick="app.deleteMember('${m.id}')" class="btn btn-primary btn-sm" style="flex:1">🗑️</button>
-                                        </div>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                    ` : ''}
-                    
-                    ${this.data.products.length > 0 ? `
-                        <div class="card">
-                            <h3>📦 Prodotti Inseriti (${this.data.products.length})</h3>
-                            <div class="grid grid-3">
-                                ${this.data.products.map(p => `
-                                    <div style="border:1px solid #e5e7eb;padding:0.75rem;border-radius:0.375rem">
-                                        <div style="margin-bottom:0.5rem">
-                                            <div style="font-weight:600">${p.name}</div>
-                                            <div class="text-sm text-gray">€${p.price.toFixed(2)} - Stock: ${p.stock}</div>
-                                        </div>
-                                        <div class="flex">
-                                            <button onclick="app.editProduct('${p.id}')" class="btn btn-gray btn-sm" style="flex:1">✏️</button>
-                                            <button onclick="app.deleteProduct('${p.id}')" class="btn btn-primary btn-sm" style="flex:1">🗑️</button>
-                                        </div>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                    ` : ''}
-                `;
-            },
-            
-            async setCash() {
-                const val = document.getElementById('cash-input').value;
-                this.data.cashRegister = parseFloat(val) || 0;
-                await this.saveToCloud();
-                alert('✅ Cassa impostata!');
-            },
-            
-            async addMember() {
-                const input = document.getElementById('member-input');
-                const name = input ? input.value.trim() : '';
-                if (!name) { alert('Inserisci un nome!'); return; }
-                
-                this.data.members.push({ id: Date.now().toString(), name: name, balance: 0 });
-                await this.saveToCloud();
-                this.render();
-            },
-            
-            async editMember(memberId) {
-                const member = this.data.members.find(m => m.id === memberId);
-                if (!member) return;
-                
-                const newName = prompt('Modifica nome vigile:', member.name);
-                if (newName && newName.trim() && newName !== member.name) {
-                    member.name = newName.trim();
-                    await this.saveToCloud();
-                    this.render();
-                    alert('✅ Nome aggiornato!');
-                }
-            },
-            
-            async deleteMember(memberId) {
-                const member = this.data.members.find(m => m.id === memberId);
-                if (!member) return;
-                
-                if (member.balance > 0) {
-                    if (!confirm(`${member.name} ha un debito di €${member.balance.toFixed(2)}.\n\nSei sicuro di voler eliminare?`)) return;
-                } else {
-                    if (!confirm(`Eliminare ${member.name}?`)) return;
-                }
-                
-                this.data.members = this.data.members.filter(m => m.id !== memberId);
-                await this.saveToCloud();
-                this.render();
-                alert('✅ Vigile eliminato!');
-            },
-            
-            async addProduct() {
-                const nameInput = document.getElementById('prod-name');
-                const priceInput = document.getElementById('prod-price');
-                const stockInput = document.getElementById('prod-stock');
-                
-                const name = nameInput ? nameInput.value.trim() : '';
-                const price = priceInput ? priceInput.value : '';
-                const stock = stockInput ? stockInput.value : '';
-                
-                if (!name || !price || !stock) { alert('Compila tutti i campi!'); return; }
-                
-                this.data.products.push({
-                    id: Date.now().toString(),
-                    name: name,
-                    price: parseFloat(price),
-                    stock: parseInt(stock)
-                });
-                
-                await this.saveToCloud();
-                this.render();
-            },
-            
-            async editProduct(productId) {
-                const product = this.data.products.find(p => p.id === productId);
-                if (!product) return;
-                
-                const newName = prompt('Modifica nome prodotto:', product.name);
-                if (!newName || !newName.trim()) return;
-                
-                const newPrice = prompt('Modifica prezzo (€):', product.price);
-                if (!newPrice || isNaN(parseFloat(newPrice))) return;
-                
-                product.name = newName.trim();
-                product.price = parseFloat(newPrice);
-                
-                await this.saveToCloud();
-                this.render();
-                alert('✅ Prodotto aggiornato!');
-            },
-            
-            async deleteProduct(productId) {
-                const product = this.data.products.find(p => p.id === productId);
-                if (!product) return;
-                
-                if (!confirm(`Eliminare "${product.name}"?`)) return;
-                
-                this.data.products = this.data.products.filter(p => p.id !== productId);
-                await this.saveToCloud();
-                this.render();
-                alert('✅ Prodotto eliminato!');
-            },
-            
-            renderVendita() {
-                if (this.data.members.length === 0 || this.data.products.length === 0) {
-                    return '<div class="alert alert-warning"><strong>⚠️ Vai alla tab "Setup"</strong><br>Devi prima configurare vigili e prodotti.</div>';
-                }
-                
-                return `
-                    <h2>🛒 Registra Vendita</h2>
-                    
-                    <div class="bg-gray mb-2">
-                        <label style="display:block;font-weight:600;margin-bottom:0.5rem">Seleziona Vigile:</label>
-                        <select id="member-select" onchange="app.data.selectedMember=this.value; app.render()">
-                            <option value="">-- Scegli --</option>
-                            ${this.data.members.map(m => 
-                                `<option value="${m.id}" ${this.data.selectedMember === m.id ? 'selected' : ''}>
-                                    ${m.name} ${m.balance > 0 ? '(€' + m.balance.toFixed(2) + ')' : ''}
-                                </option>`
-                            ).join('')}
-                        </select>
-                    </div>
-                    
-                    ${!this.data.selectedMember ? 
-                        '<p class="text-center text-gray" style="padding:3rem">Seleziona un vigile per vedere i prodotti</p>' :
-                        `<div class="grid grid-3">
-                            ${this.data.products.map(p => `
-                                <div class="card ${p.stock <= 0 ? 'bg-gray' : ''}">
-                                    <div class="card-header">${p.name}</div>
-                                    <div class="card-price">€${p.price.toFixed(2)}</div>
-                                    <div class="card-stock ${p.stock <= 0 ? 'stock-out' : p.stock <= 5 ? 'stock-low' : 'stock-ok'}">
-                                        Stock: ${p.stock}
-                                    </div>
-                                    ${p.stock > 0 ? `
-                                        <div class="flex">
-                                            <button class="btn btn-warning" style="flex:1" onclick="app.sell('${p.id}',false)">Credito</button>
-                                            <button class="btn btn-success" style="flex:1" onclick="app.sell('${p.id}',true)">Paga</button>
-                                        </div>
-                                    ` : '<div class="text-center" style="padding:0.5rem;color:#dc2626;font-weight:600">ESAURITO</div>'}
-                                </div>
-                            `).join('')}
-                        </div>`
-                    }
-                `;
-            },
-            
-            async sell(prodId, payNow) {
-                if (!this.data.selectedMember) { alert('Seleziona un vigile!'); return; }
-                
-                const member = this.data.members.find(m => m.id === this.data.selectedMember);
-                const product = this.data.products.find(p => p.id === prodId);
-                
-                if (product.stock <= 0) { alert('Prodotto esaurito!'); return; }
-                
-                product.stock--;
-                
-                this.data.transactions.push({
-                    id: Date.now().toString(),
-                    memberId: member.id,
-                    memberName: member.name,
-                    productName: product.name,
-                    price: product.price,
-                    date: new Date().toISOString(),
-                    paid: payNow
-                });
-                
-                if (payNow) {
-                    this.data.cashRegister += product.price;
-                } else {
-                    member.balance = (member.balance || 0) + product.price;
-                }
-                
-                await this.saveToCloud();
-                alert(`✅ ${product.name} venduto a ${member.name}` + (payNow ? ' (pagato)' : ' (a credito)'));
-            },
-            
-            renderMagazzino() {
-                return `
-                    <h2>📦 Gestione Magazzino</h2>
-                    ${this.data.products.length === 0 ? 
-                        '<div class="alert alert-warning">Nessun prodotto. Vai alla tab "Setup" per aggiungerne.</div>' :
-                        `<div class="grid">
-                            ${this.data.products.map(p => `
-                                <div class="card">
-                                    <div class="flex-between" style="margin-bottom:0.75rem">
-                                        <div style="flex:1">
-                                            <div style="font-weight:600;font-size:1.125rem">${p.name}</div>
-                                            <div class="text-sm text-gray">Prezzo: €${p.price.toFixed(2)}</div>
-                                        </div>
-                                        <div style="text-align:right">
-                                            <div class="text-sm text-gray">Giacenza</div>
-                                            <div style="font-size:1.875rem;font-weight:bold" class="${p.stock <= 0 ? 'stock-out' : p.stock <= 5 ? 'stock-low' : 'stock-ok'}">
-                                                ${p.stock}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="flex">
-                                        <button class="btn btn-success" style="flex:1" onclick="app.addStock('${p.id}')">+ Carico</button>
-                                        <button class="btn btn-gray" onclick="app.editProduct('${p.id}')">✏️</button>
-                                        <button class="btn btn-primary" onclick="app.deleteProduct('${p.id}')">🗑️</button>
-                                    </div>
-                                </div>
-                            `).join('')}
-                        </div>`
-                    }
-                `;
-            },
-            
-            async addStock(prodId) {
-                const qty = prompt('Quanti pezzi vuoi aggiungere?', '10');
-                if (!qty || parseInt(qty) <= 0) return;
-                
-                const product = this.data.products.find(p => p.id === prodId);
-                const quantity = parseInt(qty);
-                const totalCost = quantity * product.price;
-                
-                if (confirm(`Costo totale: €${totalCost.toFixed(2)}\n\nScaricare dalla cassa?`)) {
-                    this.data.cashRegister -= totalCost;
-                    this.data.purchases.unshift({
-                        id: Date.now().toString(),
-                        description: `Carico ${quantity}x ${product.name}`,
-                        amount: totalCost,
-                        date: new Date().toISOString()
-                    });
-                }
-                
-                product.stock += quantity;
-                await this.saveToCloud();
-                alert('✅ Stock aggiornato!');
-            },
-            
-            renderConti() {
-                const withDebt = this.data.members.filter(m => (m.balance || 0) > 0).sort((a,b) => b.balance - a.balance);
-                
-                return `
-                    <h2>💰 Gestione Conti</h2>
-                    ${withDebt.length === 0 ? 
-                        '<p class="text-center text-gray" style="padding:3rem">Nessun debito da riscuotere</p>' :
-                        `<div class="grid">
-                            ${withDebt.map(m => {
-                                const trans = this.data.transactions.filter(t => t.memberId === m.id && !t.paid);
-                                return `
-                                    <div class="card">
-                                        <div class="flex-between mb-1">
-                                            <div>
-                                                <div style="font-weight:600;font-size:1.125rem">${m.name}</div>
-                                                <div class="text-sm text-gray">${trans.length} prodotti non pagati</div>
-                                            </div>
-                                            <div style="text-align:right">
-                                                <div style="font-size:1.5rem;font-weight:bold;color:#dc2626">€${m.balance.toFixed(2)}</div>
-                                                <button class="btn btn-success" style="margin-top:0.25rem" onclick="app.payDebt('${m.id}')">Paga</button>
-                                            </div>
-                                        </div>
-                                        <details>
-                                            <summary style="cursor:pointer;font-size:0.875rem;color:#6b7280">Dettaglio</summary>
-                                            <div style="margin-top:0.5rem;padding-top:0.5rem;border-top:1px solid #e5e7eb">
-                                                ${trans.map(t => `
-                                                    <div class="flex-between text-sm" style="margin-bottom:0.25rem">
-                                                        <span>${t.productName}</span>
-                                                        <span style="font-weight:600">€${t.price.toFixed(2)}</span>
-                                                    </div>
-                                                `).join('')}
-                                            </div>
-                                        </details>
-                                    </div>
-                                `;
-                            }).join('')}
-                        </div>`
-                    }
-                `;
-            },
-            
-            async payDebt(memberId) {
-                const member = this.data.members.find(m => m.id === memberId);
-                if (!confirm(`Confermi pagamento di €${member.balance.toFixed(2)} da ${member.name}?`)) return;
-                
-                this.data.cashRegister += member.balance;
-                member.balance = 0;
-                
-                // Aggiorna tutte le transazioni del vigile da "a credito" a "pagate"
-                this.data.transactions.forEach(t => {
-                    if (t.memberId === memberId && !t.paid) {
-                        t.paid = true;
-                    }
-                });
-                
-                await this.saveToCloud();
-                alert('✅ Pagamento registrato!');
-            },
-            
-            renderCassa() {
-                const allTransactions = [...this.data.transactions].sort((a, b) => 
-                    new Date(b.date) - new Date(a.date)
-                );
-                
-                return `
-                    <h2>💵 Situazione Cassa</h2>
-                    
-                    <div class="grid grid-3 mb-4">
-                        <div class="card" style="background:#d1fae5;border-color:#34d399">
-                            <div class="text-sm text-gray">Denaro in cassa</div>
-                            <div style="font-size:2rem;font-weight:bold;color:#16a34a">€${this.data.cashRegister.toFixed(2)}</div>
-                            <button onclick="app.editCash()" style="margin-top:0.5rem;background:transparent;border:none;color:#16a34a;font-weight:600;cursor:pointer;font-size:0.875rem">Modifica</button>
-                        </div>
-                        <div class="card" style="background:#fed7aa;border-color:#fb923c">
-                            <div class="text-sm text-gray">Crediti da riscuotere</div>
-                            <div style="font-size:2rem;font-weight:bold;color:#ea580c">€${this.getTotalDebt().toFixed(2)}</div>
-                        </div>
-                        <div class="card" style="background:#dbeafe;border-color:#60a5fa">
-                            <div class="text-sm text-gray">Totale previsto</div>
-                            <div style="font-size:2rem;font-weight:bold;color:#2563eb">€${(this.data.cashRegister + this.getTotalDebt()).toFixed(2)}</div>
-                        </div>
-                    </div>
-                    
-                    <button class="btn btn-primary mb-2" onclick="app.addPurchase()" style="width:100%">📝 Registra Acquisto</button>
-                    
-                    <h3>📊 Storico Vendite</h3>
-                    ${allTransactions.length === 0 ?
-                        '<p class="text-center text-gray" style="padding:2rem">Nessuna vendita registrata</p>' :
-                        `<div class="grid" style="margin-bottom:2rem">
-                            ${allTransactions.slice(0, 50).map(t => `
-                                <div class="card" style="background:${t.paid ? '#d1fae5' : '#fef3c7'};border-color:${t.paid ? '#34d399' : '#fbbf24'}">
-                                    <div class="flex-between">
-                                        <div style="flex:1">
-                                            <div style="font-weight:600">${t.memberName}</div>
-                                            <div class="text-sm text-gray">${t.productName}</div>
-                                            <div class="text-sm text-gray">${new Date(t.date).toLocaleString('it-IT')}</div>
-                                        </div>
-                                        <div style="text-align:right">
-                                            <div style="font-size:1.25rem;font-weight:bold;color:${t.paid ? '#16a34a' : '#ea580c'}">
-                                                €${t.price.toFixed(2)}
-                                            </div>
-                                            <div style="font-size:0.75rem;font-weight:600;color:${t.paid ? '#16a34a' : '#ea580c'}">
-                                                ${t.paid ? '✓ Pagato' : '⏳ A credito'}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            `).join('')}
-                        </div>`
-                    }
-                    
-                    <h3>🛒 Ultimi Acquisti Materiale</h3>
-                    ${this.data.purchases.length === 0 ?
-                        '<p class="text-center text-gray" style="padding:2rem">Nessun acquisto registrato</p>' :
-                        `<div class="grid">
-                            ${this.data.purchases.slice(0, 10).map(p => `
-                                <div class="card" style="background:#fee2e2;border-color:#fca5a5">
-                                    <div class="flex-between">
-                                        <div>
-                                            <div style="font-weight:600">${p.description}</div>
-                                            <div class="text-sm text-gray">${new Date(p.date).toLocaleString('it-IT')}</div>
-                                        </div>
-                                        <div style="font-size:1.25rem;font-weight:bold;color:#dc2626">-€${p.amount.toFixed(2)}</div>
-                                    </div>
-                                </div>
-                            `).join('')}
-                        </div>`
-                    }
-                `;
-            },
-            
-            async editCash() {
-                const val = prompt('Nuovo importo in cassa:', this.data.cashRegister);
-                if (val === null) return;
-                this.data.cashRegister = parseFloat(val) || 0;
-                await this.saveToCloud();
-                this.render();
-            },
-            
-            async addPurchase() {
-                const desc = prompt('Descrizione acquisto (es: Bibite, caffè...):');
-                if (!desc) return;
-                const amount = prompt('Importo in euro:');
-                if (!amount) return;
-                
-                const amt = parseFloat(amount);
-                this.data.purchases.unshift({
-                    id: Date.now().toString(),
-                    description: desc.trim(),
-                    amount: amt,
-                    date: new Date().toISOString()
-                });
-                this.data.cashRegister -= amt;
-                await this.saveToCloud();
-                this.render();
-                alert('✅ Acquisto registrato!');
-            },
-            
-            renderVigili() {
-                const sortedMembers = [...this.data.members].sort((a, b) => a.name.localeCompare(b.name));
-                return `
-                    <h2>👥 Gestione Vigili</h2>
-                    <div class="mb-2 bg-gray">
-                        <div class="flex">
-                            <input type="text" id="vigile-input" placeholder="Nome e Cognome" style="flex:1">
-                            <button onclick="app.addMemberFromVigili()" class="btn btn-primary">Aggiungi</button>
-                        </div>
-                    </div>
-                    
-                    <div class="grid">
-                        ${sortedMembers.map(m => `
-                            <div class="card">
-                                <div class="flex-between">
-                                    <div style="flex:1">
-                                        <div style="font-weight:600;font-size:1.125rem">${m.name}</div>
-                                        <div class="text-sm text-gray">Debito: €${m.balance.toFixed(2)}</div>
-                                    </div>
-                                    <div class="flex">
-                                        <button class="btn btn-gray" onclick="app.editMember('${m.id}')">✏️</button>
-                                        <button class="btn btn-primary" onclick="app.deleteMember('${m.id}')">🗑️</button>
-                                    </div>
-                                </div>
-                            </div>
-                        `).join('')}
-                        ${sortedMembers.length === 0 ? '<p class="text-center text-gray" style="padding:3rem">Nessun vigile</p>' : ''}
-                    </div>
-                `;
-            },
-            
-            async addMemberFromVigili() {
-                const input = document.getElementById('vigile-input');
-                const name = input ? input.value.trim() : '';
-                if (!name) { alert('Inserisci un nome!'); return; }
-                
-                this.data.members.push({ id: Date.now().toString(), name: name, balance: 0 });
-                await this.saveToCloud();
-                this.render();
-            }
+<!-- ============ LOGIN SCREEN ============ -->
+<div id="login-screen" class="login-wrap">
+    <div class="login-box">
+        <div class="emoji">🚒</div>
+        <h1>Bar VVF Lentini</h1>
+        <p class="subtitle">Accedi per continuare</p>
+
+        <div id="login-view">
+            <div id="login-error" class="login-error hidden"></div>
+            <div class="form-group">
+                <label>Email</label>
+                <input type="email" id="login-email" placeholder="nome@email.it" autocomplete="email">
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" id="login-pass" placeholder="••••••" autocomplete="current-password">
+            </div>
+            <button class="login-btn primary" onclick="Auth.login()">Accedi</button>
+            <div class="login-toggle">Non hai un account? <a onclick="Auth.toggleView('register')">Registrati</a></div>
+        </div>
+
+        <div id="register-view" class="hidden">
+            <div id="reg-error" class="login-error hidden"></div>
+            <div class="form-group">
+                <label>Nome e Cognome</label>
+                <input type="text" id="reg-name" placeholder="Mario Rossi">
+            </div>
+            <div class="form-group">
+                <label>Email</label>
+                <input type="email" id="reg-email" placeholder="nome@email.it" autocomplete="email">
+            </div>
+            <div class="form-group">
+                <label>Password (min 6 caratteri)</label>
+                <input type="password" id="reg-pass" placeholder="••••••" autocomplete="new-password">
+            </div>
+            <div class="form-group">
+                <label>Il tuo turno</label>
+                <div class="shift-picker" id="reg-shift">
+                    <div class="shift-opt" data-shift="A" onclick="Auth.pickShift('A')">A</div>
+                    <div class="shift-opt" data-shift="B" onclick="Auth.pickShift('B')">B</div>
+                    <div class="shift-opt" data-shift="C" onclick="Auth.pickShift('C')">C</div>
+                    <div class="shift-opt" data-shift="D" onclick="Auth.pickShift('D')">D</div>
+                </div>
+            </div>
+            <button class="login-btn primary" onclick="Auth.register()">Registrati</button>
+            <div class="login-toggle">Hai già un account? <a onclick="Auth.toggleView('login')">Accedi</a></div>
+        </div>
+    </div>
+</div>
+
+<!-- ============ APP SCREEN ============ -->
+<div id="app-screen" class="app-container hidden">
+    <div class="header">
+        <h1>🚒 Bar VVF Lentini</h1>
+        <p class="user-line" id="user-line"></p>
+        <div class="header-actions">
+            <button onclick="Auth.logout()">Esci</button>
+        </div>
+        <div class="header-stats" id="header-stats"></div>
+    </div>
+    <div class="sync-bar">
+        <div class="sync-dot" id="sync-dot"></div>
+        <span id="sync-text">Connessione...</span>
+    </div>
+    <div class="tabs" id="tabs"></div>
+    <div class="content" id="content"></div>
+</div>
+
+<!-- ============ MODAL ============ -->
+<div id="modal-root"></div>
+
+<!-- FIREBASE SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
+<script>
+// =============================================
+// FIREBASE INIT
+// =============================================
+firebase.initializeApp({
+    apiKey: "AIzaSyC_C2ER65Ih1LY-eq_jc42wuFz09Q4Bo9c",
+    authDomain: "bar-vvf-lentini.firebaseapp.com",
+    databaseURL: "https://bar-vvf-lentini-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "bar-vvf-lentini",
+    storageBucket: "bar-vvf-lentini.firebasestorage.app",
+    messagingSenderId: "671303628842",
+    appId: "1:671303628842:web:5c9abff4aa1ed7f99b6b53"
+});
+const db = firebase.database();
+const fbAuth = firebase.auth();
+
+// =============================================
+// CONSTANTS & UTILITIES
+// =============================================
+const SUPER_ADMIN_EMAIL = 'luca.lagana@vigilfuoco.it';
+const SHIFTS = ['A', 'B', 'C', 'D'];
+const SCHEMA_VERSION = 2;
+const COFFEE_NAME_REGEX = /caff/i; // auto-detect coffee at migration
+
+const uid = () => Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+const fmt = iso => new Date(iso).toLocaleString('it-IT', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+const escapeHtml = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const escapeAttr = s => String(s == null ? '' : s).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+
+const toArr = v => !v ? [] : Array.isArray(v) ? v.filter(Boolean) : Object.values(v);
+const toMap = arr => { const m = {}; arr.forEach(x => { if (x && x.id) m[x.id] = x; }); return m; };
+
+// Distribuzione equa di una quantità su N turni: il resto va ai primi turni in ordine.
+// es. splitQty(31, ['A','C','D']) = { A:11, C:10, D:10 }
+function splitQty(qty, shifts) {
+    const out = {};
+    if (!shifts || shifts.length === 0) return out;
+    const each = Math.floor(qty / shifts.length);
+    const remainder = qty - each * shifts.length;
+    shifts.forEach((s, i) => { out[s] = each + (i < remainder ? 1 : 0); });
+    return out;
+}
+
+// =============================================
+// AUTH
+// =============================================
+const Auth = {
+    user: null,
+    _pickedShift: null,
+
+    toggleView(view) {
+        document.getElementById('login-view').classList.toggle('hidden', view !== 'login');
+        document.getElementById('register-view').classList.toggle('hidden', view !== 'register');
+        document.getElementById('login-error').classList.add('hidden');
+        document.getElementById('reg-error').classList.add('hidden');
+    },
+
+    pickShift(s) {
+        this._pickedShift = s;
+        document.querySelectorAll('#reg-shift .shift-opt').forEach(el => {
+            el.classList.toggle('selected', el.dataset.shift === s);
+        });
+    },
+
+    showError(id, msg) {
+        const el = document.getElementById(id);
+        el.textContent = msg;
+        el.classList.remove('hidden');
+    },
+
+    async login() {
+        const email = document.getElementById('login-email').value.trim();
+        const pass = document.getElementById('login-pass').value;
+        if (!email || !pass) return this.showError('login-error', 'Inserisci email e password');
+        try {
+            await fbAuth.signInWithEmailAndPassword(email, pass);
+        } catch(e) {
+            this.showError('login-error', 'Email o password errati');
+        }
+    },
+
+    async register() {
+        const name = document.getElementById('reg-name').value.trim();
+        const email = document.getElementById('reg-email').value.trim();
+        const pass = document.getElementById('reg-pass').value;
+        if (!name || !email || !pass) return this.showError('reg-error', 'Compila tutti i campi');
+        if (pass.length < 6) return this.showError('reg-error', 'Password minimo 6 caratteri');
+        if (!this._pickedShift) return this.showError('reg-error', 'Seleziona il tuo turno');
+
+        const isSuper = email.toLowerCase() === SUPER_ADMIN_EMAIL;
+        try {
+            const cred = await fbAuth.createUserWithEmailAndPassword(email, pass);
+            const role = isSuper ? 'super_admin' : 'user';
+            await db.ref('users/' + cred.user.uid).set({
+                name, email, role, shift: this._pickedShift,
+                createdAt: new Date().toISOString()
+            });
+        } catch(e) {
+            this.showError('reg-error', e.code === 'auth/email-already-in-use' ? 'Email già registrata' : 'Errore: ' + e.message);
+        }
+    },
+
+    async loadProfile(firebaseUser) {
+        const snap = await db.ref('users/' + firebaseUser.uid).once('value');
+        const data = snap.val();
+        if (!data) { fbAuth.signOut(); return; }
+        this.user = { uid: firebaseUser.uid, email: firebaseUser.email, ...data };
+
+        document.getElementById('login-screen').classList.add('hidden');
+        document.getElementById('app-screen').classList.remove('hidden');
+
+        const badges = {
+            super_admin: '<span class="badge badge-super">👑 Gestore</span>',
+            admin: '<span class="badge badge-admin">🔧 Admin</span>',
+            user: '<span class="badge badge-user">👤 Vigile</span>'
         };
-        
-        window.app = app;
-        app.init();
-    </script>
+        const shiftBadge = this.user.shift ? `<span class="badge badge-shift">Turno ${this.user.shift}</span>` : '';
+        document.getElementById('user-line').innerHTML = `${escapeHtml(this.user.name)} ${badges[this.user.role] || ''} ${shiftBadge}`;
+
+        App.init();
+    },
+
+    logout() { fbAuth.signOut(); location.reload(); },
+
+    isAdmin() { return this.user && (this.user.role === 'admin' || this.user.role === 'super_admin'); },
+    isSuperAdmin() { return this.user && this.user.role === 'super_admin'; },
+    myShift() { return this.user ? this.user.shift : null; }
+};
+
+// =============================================
+// MODAL
+// =============================================
+function modal(title, html) {
+    document.getElementById('modal-root').innerHTML = `
+        <div class="modal-bg" onclick="if(event.target===this)modalClose()">
+            <div class="modal">
+                <div class="flex-between mb-2"><h2 style="margin:0">${title}</h2><button class="btn btn-gray btn-sm" onclick="modalClose()">✕</button></div>
+                ${html}
+            </div>
+        </div>`;
+}
+function modalClose() { document.getElementById('modal-root').innerHTML = ''; }
+
+// =============================================
+// APP
+// =============================================
+const App = {
+    members: [], products: [], transactions: [], purchases: [],
+    cashRegister: 0, schemaVersion: 1, users: [],
+    tab: 'home', online: false, listeners: [],
+    _autoMigrated: false,
+
+    init() {
+        this.tab = Auth.isAdmin() ? 'dashboard' : 'home';
+        this.listen();
+    },
+
+    listen() {
+        this.listeners.forEach(l => l());
+        this.listeners = [];
+
+        const barRef = db.ref('bar-data');
+        barRef.on('value', snap => {
+            const d = snap.val() || {};
+            this.members = toArr(d.members);
+            this.products = this._normalizeProducts(toArr(d.products));
+            this.transactions = toArr(d.transactions);
+            this.purchases = toArr(d.purchases);
+            this.cashRegister = d.cashRegister || 0;
+            this.schemaVersion = d.schemaVersion || 1;
+            this.online = true;
+            this.saveLocal();
+            this.updateSync();
+
+            if (this.schemaVersion < SCHEMA_VERSION && Auth.isSuperAdmin() && !this._autoMigrated) {
+                this._autoMigrated = true;
+                this.runAutoMigration();
+                return;
+            }
+            this.render();
+        }, err => {
+            console.log('Firebase offline', err);
+            this.loadLocal();
+            this.online = false;
+            this.updateSync();
+            this.render();
+        });
+        this.listeners.push(() => barRef.off());
+
+        if (Auth.isAdmin()) {
+            const usersRef = db.ref('users');
+            usersRef.on('value', snap => {
+                this.users = [];
+                snap.forEach(c => this.users.push({ uid: c.key, ...c.val() }));
+                if (['admin','vigili','turni'].includes(this.tab)) this.render();
+            });
+            this.listeners.push(() => usersRef.off());
+        }
+    },
+
+    _normalizeProducts(arr) {
+        return arr.map(p => {
+            const isCoffee = !!p.isCoffee;
+            const usedByShifts = isCoffee ? (Array.isArray(p.usedByShifts) && p.usedByShifts.length > 0 ? p.usedByShifts : [...SHIFTS]) : null;
+            const shiftStock = isCoffee ? Object.assign({A:0,B:0,C:0,D:0}, p.shiftStock || {}) : null;
+            return {
+                id: p.id, name: p.name, price: Number(p.price) || 0,
+                isCoffee, usedByShifts,
+                stock: isCoffee ? 0 : (Number(p.stock) || 0),
+                shiftStock
+            };
+        });
+    },
+
+    productTotalStock(p) {
+        if (p.isCoffee) return SHIFTS.reduce((s,k) => s + (p.shiftStock[k]||0), 0);
+        return p.stock || 0;
+    },
+
+    productVisibleStock(p) {
+        if (!p.isCoffee) return p.stock || 0;
+        const sh = Auth.myShift();
+        if (!sh || !p.usedByShifts.includes(sh)) return -1; // -1 = not for this shift
+        return p.shiftStock[sh] || 0;
+    },
+
+    // Coffee products that the current user (or specified shift) can buy
+    coffeeForShift(shift) {
+        return this.products.filter(p => p.isCoffee && p.usedByShifts.includes(shift));
+    },
+
+    updateSync() {
+        const dot = document.getElementById('sync-dot');
+        const txt = document.getElementById('sync-text');
+        if (!dot) return;
+        dot.className = this.online ? 'sync-dot' : 'sync-dot off';
+        txt.textContent = this.online ? 'Online · ' + new Date().toLocaleTimeString('it-IT') : 'Offline';
+    },
+
+    async save() {
+        this.saveLocal();
+        try {
+            await db.ref('bar-data').update({
+                members: toMap(this.members),
+                products: toMap(this.products),
+                transactions: toMap(this.transactions),
+                purchases: toMap(this.purchases),
+                cashRegister: this.cashRegister,
+                schemaVersion: SCHEMA_VERSION,
+                lastUpdate: new Date().toISOString()
+            });
+            this.online = true;
+        } catch(e) {
+            this.online = false;
+            this.updateSync();
+            alert('Errore salvataggio cloud: ' + e.message + '\n\nDati salvati in locale.');
+        }
+    },
+
+    saveLocal() {
+        try {
+            localStorage.setItem('vvf-data', JSON.stringify({
+                members: this.members, products: this.products,
+                transactions: this.transactions, purchases: this.purchases,
+                cashRegister: this.cashRegister, schemaVersion: this.schemaVersion
+            }));
+        } catch(e) {}
+    },
+
+    loadLocal() {
+        try {
+            const data = JSON.parse(localStorage.getItem('vvf-data') || '{}');
+            this.members = data.members || [];
+            this.products = this._normalizeProducts(data.products || []);
+            this.transactions = data.transactions || [];
+            this.purchases = data.purchases || [];
+            this.cashRegister = data.cashRegister || 0;
+            this.schemaVersion = data.schemaVersion || 1;
+        } catch(e) {}
+    },
+
+    myMember() {
+        return this.members.find(m => m.userId === Auth.user.uid);
+    },
+
+    // =====================================================
+    // AUTO-MIGRAZIONE SCHEMA v1 → v2
+    // =====================================================
+    async runAutoMigration() {
+        try {
+            const products = this.products.map(p => {
+                if (COFFEE_NAME_REGEX.test(p.name || '') && !p.isCoffee) {
+                    const oldStock = Number(p.stock) || 0;
+                    return {
+                        ...p,
+                        isCoffee: true,
+                        usedByShifts: [...SHIFTS],   // default: tutti i turni
+                        stock: 0,
+                        shiftStock: { A: oldStock, B: 0, C: 0, D: 0 } // tutto in A finché non distribuito
+                    };
+                }
+                return p;
+            });
+            const members = this.members.map(m => ({ ...m, shift: m.shift || null }));
+
+            await db.ref('bar-data').update({
+                products: toMap(products),
+                members: toMap(members),
+                schemaVersion: SCHEMA_VERSION,
+                migrationV2Date: new Date().toISOString(),
+                migrationV2By: Auth.user.name
+            });
+
+            this.products = this._normalizeProducts(products);
+            this.members = members;
+            this.schemaVersion = SCHEMA_VERSION;
+
+            const needsSetup = products.some(p => p.isCoffee) || members.some(m => !m.shift);
+            if (needsSetup) this.tab = 'turni';
+            this.render();
+
+            setTimeout(() => {
+                alert('🎉 Schema aggiornato!\n\nL\'app ora supporta la divisione del caffè per turno.\n\n' +
+                    'Vai in 🕐 Turni per:\n' +
+                    '• Assegnare un turno (A/B/C/D) a ciascun vigile\n' +
+                    '• Configurare quali turni usano ogni caffè\n' +
+                    '• Distribuire la giacenza caffè tra i turni\n\n' +
+                    'Tutti i dati esistenti sono preservati.');
+            }, 500);
+        } catch(e) {
+            console.error('Errore migrazione:', e);
+            alert('Errore migrazione: ' + e.message);
+        }
+    },
+
+    // =====================================================
+    // RENDER
+    // =====================================================
+    render() {
+        const ae = document.activeElement;
+        if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'SELECT')) {
+            this.renderHeaderStats();
+            return;
+        }
+        this.renderHeaderStats();
+        this.renderTabs();
+        this.renderContent();
+    },
+
+    renderHeaderStats() {
+        const el = document.getElementById('header-stats');
+        if (!el) return;
+        if (Auth.isAdmin()) {
+            const totalDebt = this.members.reduce((s,m) => s + (m.balance||0), 0);
+            const totalCoffee = this.products.filter(p=>p.isCoffee).reduce((s,p) => s + this.productTotalStock(p), 0);
+            el.innerHTML = `
+                <div class="header-stat"><div class="hs-label">💰 Cassa</div><div class="hs-value">€${this.cashRegister.toFixed(2)}</div></div>
+                <div class="header-stat"><div class="hs-label">📊 Crediti</div><div class="hs-value">€${totalDebt.toFixed(2)}</div></div>
+                <div class="header-stat"><div class="hs-label">☕ Caffè tot</div><div class="hs-value">${totalCoffee}</div></div>
+                <div class="header-stat"><div class="hs-label">👥 Vigili</div><div class="hs-value">${this.members.length}</div></div>`;
+        } else {
+            const me = this.myMember();
+            const bal = me ? (me.balance||0) : 0;
+            const sh = Auth.myShift();
+            const myCoffee = sh ? this.coffeeForShift(sh).reduce((s,p) => s + (p.shiftStock[sh]||0), 0) : 0;
+            el.innerHTML = `
+                <div class="header-stat"><div class="hs-label">💰 Mio debito</div><div class="hs-value" style="color:${bal>0?'#fca5a5':'#86efac'}">€${bal.toFixed(2)}</div></div>
+                <div class="header-stat"><div class="hs-label">💵 Cassa</div><div class="hs-value">€${this.cashRegister.toFixed(2)}</div></div>
+                <div class="header-stat"><div class="hs-label">☕ Mio turno</div><div class="hs-value">${myCoffee}</div></div>
+                <div class="header-stat"><div class="hs-label">📦 Prodotti</div><div class="hs-value">${this.products.filter(p=>!p.isCoffee && p.stock>0).length}</div></div>`;
+        }
+    },
+
+    renderTabs() {
+        let tabs;
+        if (Auth.isSuperAdmin()) {
+            tabs = [['dashboard','📊'],['vendita','🛒'],['carico','📥 Carico'],['magazzino','📦'],
+                    ['conti','💰 Conti'],['cassa','💵 Cassa'],['vigili','👥'],['turni','🕐 Turni'],['admin','👑']];
+        } else if (Auth.isAdmin()) {
+            tabs = [['dashboard','📊'],['vendita','🛒'],['carico','📥 Carico'],['magazzino','📦'],
+                    ['conti','💰 Conti'],['cassa','💵 Cassa'],['vigili','👥'],['turni','🕐 Turni']];
+        } else {
+            tabs = [['home','🏠'],['acquista','🛒 Acquista'],['carico','📥 Carico'],['storico','📋 Storico']];
+        }
+        document.getElementById('tabs').innerHTML = tabs.map(([id, label]) =>
+            `<button class="tab ${this.tab===id?'active':''}" onclick="App.switchTab('${id}')">${label}</button>`
+        ).join('');
+    },
+
+    switchTab(t) { this.tab = t; this.renderTabs(); this.renderContent(); },
+
+    renderContent() {
+        const fn = 'page_' + this.tab;
+        document.getElementById('content').innerHTML = this[fn] ? this[fn]() : '<p>Sezione non disponibile</p>';
+    },
+
+    // ========================================================
+    // PAGINE UTENTE
+    // ========================================================
+    page_home() {
+        const me = this.myMember();
+        const bal = me ? (me.balance || 0) : 0;
+        const myTx = me ? this.transactions.filter(t => t.memberId === me.id).sort((a,b) => new Date(b.date)-new Date(a.date)).slice(0,8) : [];
+        const sh = Auth.myShift();
+
+        return `
+            <h2>Ciao, ${escapeHtml(Auth.user.name)}!</h2>
+            ${!sh ? '<div class="alert alert-warn"><strong>⚠️ Turno non impostato</strong><br>Chiedi a un amministratore di assegnarti un turno.</div>' : ''}
+            ${!me ? `<div class="alert alert-warn"><strong>⚠️ Account non collegato</strong><br>Chiedi a un amministratore di collegare il tuo account al sistema. Lo storico precedente è custodito ma non visibile finché non viene collegato.</div>` : `
+                <div class="stats-row">
+                    <div class="stat-card">
+                        <div class="label">Mio debito</div>
+                        <div class="value" style="color:${bal > 0 ? '#dc2626' : '#16a34a'}">€${bal.toFixed(2)}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">Mio turno</div>
+                        <div class="value" style="color:#3b82f6">${sh || '—'}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">Cassa comune</div>
+                        <div class="value" style="color:#16a34a;font-size:1.2rem">€${this.cashRegister.toFixed(2)}</div>
+                    </div>
+                </div>
+            `}
+            <h3>Ultime transazioni</h3>
+            ${myTx.length === 0 ? '<p class="text-center text-gray" style="padding:2rem">Nessuna transazione</p>' :
+                myTx.map(t => `
+                    <div class="tx-item ${t.paid?'paid':'unpaid'}">
+                        <div><strong>${escapeHtml(t.productName)}</strong>${t.shift?` <span class="chip chip-shift">${t.shift}</span>`:''}<br><span class="text-sm text-gray">${fmt(t.date)}</span></div>
+                        <div style="text-align:right"><strong style="color:#dc2626">€${t.price.toFixed(2)}</strong><br>
+                        <span class="chip ${t.paid?'chip-green':'chip-orange'}">${t.paid?'✓ Pagato':'⏳ Credito'}</span></div>
+                    </div>`).join('')}`;
+    },
+
+    page_acquista() {
+        const sh = Auth.myShift();
+        const isAdmin = Auth.isAdmin();
+        // utente normale: vede caffè solo del proprio turno + tutti gli altri prodotti
+        // admin: vede tutto (anche caffè di altri turni, ma scala dal proprio)
+        const visibleProducts = isAdmin
+            ? this.products
+            : this.products.filter(p => !p.isCoffee || (sh && p.usedByShifts.includes(sh)));
+
+        return `
+            <h2>🛒 Acquista</h2>
+            ${!sh ? '<div class="alert alert-warn">⚠️ Senza un turno assegnato non puoi acquistare il caffè. Gli altri prodotti restano disponibili.</div>' : ''}
+            <p class="text-sm text-gray mb-2">Tocca un prodotto per registrare l'acquisto. Il caffè si scala dal tuo turno (${sh||'—'}).</p>
+            ${visibleProducts.length === 0 ? '<p class="text-center text-gray" style="padding:2rem">Nessun prodotto disponibile</p>' : `
+                <div class="product-grid">
+                    ${visibleProducts.map(p => this._renderUserProductCard(p)).join('')}
+                </div>`}`;
+    },
+
+    _renderUserProductCard(p) {
+        const sh = Auth.myShift();
+        const visible = this.productVisibleStock(p);
+        const isCoffeeNotMine = p.isCoffee && visible === -1; // caffè non del mio turno
+        const canBuy = !isCoffeeNotMine && (p.isCoffee ? (sh && visible > 0) : (visible > 0));
+
+        let stockText, stockClass;
+        if (isCoffeeNotMine) {
+            stockText = `Solo per turni ${p.usedByShifts.join('/')}`;
+            stockClass = 'text-gray';
+        } else if (p.isCoffee) {
+            stockText = sh ? (visible<=0 ? `❌ Esaurito (T${sh})` : `Turno ${sh}: ${visible}`) : 'Turno non impostato';
+            stockClass = visible<=0 ? 'stock-out' : visible<=5 ? 'stock-low' : 'stock-ok';
+        } else {
+            stockText = visible<=0 ? '❌ Esaurito' : `Stock: ${visible}`;
+            stockClass = visible<=0 ? 'stock-out' : visible<=5 ? 'stock-low' : 'stock-ok';
+        }
+
+        return `<div class="p-card ${p.isCoffee?'coffee':''}" style="${!canBuy?'opacity:0.55':''}">
+            <div class="name">${escapeHtml(p.name)}${p.isCoffee?'<span class="coffee-tag">CAFFÈ</span>':''}</div>
+            <div class="price">€${p.price.toFixed(2)}</div>
+            <div class="stock ${stockClass}">${stockText}</div>
+            ${canBuy ? `
+                <div class="flex">
+                    <button class="btn btn-orange btn-sm" style="flex:1" onclick="App.userBuy('${p.id}',false)">📝 Credito</button>
+                    <button class="btn btn-green btn-sm" style="flex:1" onclick="App.userBuy('${p.id}',true)">💵 Paga</button>
+                </div>` : (p.isCoffee && !sh ? '<div class="text-sm text-gray">⚠️ turno mancante</div>' : '')}
+        </div>`;
+    },
+
+    async userBuy(prodId, payNow) {
+        const me = this.myMember();
+        if (!me) { alert('Account non collegato. Contatta un amministratore.'); return; }
+        const prod = this.products.find(p => p.id === prodId);
+        if (!prod) return;
+
+        const sh = Auth.myShift();
+        if (prod.isCoffee && !sh) { alert('Devi avere un turno assegnato per acquistare il caffè.'); return; }
+        if (prod.isCoffee && !prod.usedByShifts.includes(sh)) { alert(`Questo caffè è solo per i turni ${prod.usedByShifts.join('/')}.`); return; }
+
+        const visible = this.productVisibleStock(prod);
+        if (visible <= 0) {
+            alert(prod.isCoffee ? `Caffè esaurito nel tuo turno (${sh})!` : `${prod.name} esaurito!`);
+            return;
+        }
+
+        const payLabel = payNow ? 'pagando subito' : 'a credito';
+        const ctx = prod.isCoffee ? ` (turno ${sh})` : '';
+        if (!confirm(`Acquistare ${prod.name}${ctx} a €${prod.price.toFixed(2)} ${payLabel}?`)) return;
+
+        if (prod.isCoffee) prod.shiftStock[sh] = (prod.shiftStock[sh]||0) - 1;
+        else prod.stock--;
+
+        this.transactions.push({
+            id: uid(), memberId: me.id, memberName: me.name,
+            productId: prod.id, productName: prod.name,
+            price: prod.price, date: new Date().toISOString(),
+            paid: payNow, shift: prod.isCoffee ? sh : null,
+            isCoffee: !!prod.isCoffee,
+            registeredBy: Auth.user.name, registeredByUid: Auth.user.uid
+        });
+
+        if (payNow) this.cashRegister += prod.price;
+        else me.balance = (me.balance || 0) + prod.price;
+
+        await this.save();
+        alert(`✅ ${prod.name} acquistato${payNow ? ' (pagato)' : ' (a credito)'}!`);
+    },
+
+    page_carico() {
+        const sh = Auth.myShift();
+        return `
+            <h2>📥 Carico Merce</h2>
+            <div class="alert alert-info">
+                <strong>Hai comprato qualcosa per il bar?</strong><br>
+                Inserisci quantità e importo: stock e cassa si aggiornano da soli.
+                <br><span class="text-sm">☕ Il caffè viene <strong>diviso automaticamente</strong> tra i turni che lo usano.</span>
+            </div>
+            ${this.products.length === 0 ? '<p class="text-center text-gray" style="padding:2rem">Nessun prodotto. Chiedi a un admin di crearne almeno uno.</p>' : `
+                <div class="product-grid">
+                    ${this.products.map(p => `
+                        <div class="p-card ${p.isCoffee?'coffee':''}">
+                            <div class="name">${escapeHtml(p.name)}${p.isCoffee?'<span class="coffee-tag">CAFFÈ</span>':''}</div>
+                            <div class="price">€${p.price.toFixed(2)}</div>
+                            <div class="stock text-gray text-sm">${p.isCoffee
+                                ? `Turni: ${p.usedByShifts.join('/')} · Tot: ${this.productTotalStock(p)}`
+                                : `Stock: ${p.stock}`}</div>
+                            <button class="btn btn-blue btn-sm btn-full" onclick="App.modalCarico('${p.id}')">📥 Carica</button>
+                        </div>`).join('')}
+                </div>`}
+
+            <div class="divider"></div>
+            <h3>📋 Ultimi carichi</h3>
+            ${this.purchases.filter(p => p.productId && !p.isAdjustment).slice(0,10).map(p => `
+                <div class="tx-item carico">
+                    <div>
+                        <strong>${escapeHtml(p.productName||p.description)}</strong>
+                        ${p.qty?` <span class="chip chip-blue">+${p.qty} pz</span>`:''}
+                        ${p.distribution?` <span class="text-sm text-gray">(${p.distribution})</span>`:''}
+                        <br><span class="text-sm text-gray">${fmt(p.date)} · ${escapeHtml(p.registeredBy||'')}</span>
+                    </div>
+                    <div style="text-align:right"><strong style="color:#dc2626">-€${p.amount.toFixed(2)}</strong></div>
+                </div>`).join('') || '<p class="text-center text-gray text-sm">Nessun carico ancora registrato.</p>'}
+        `;
+    },
+
+    modalCarico(prodId) {
+        const p = this.products.find(x => x.id === prodId);
+        if (!p) return;
+
+        // Per coffee: già sappiamo i turni di destinazione (p.usedByShifts)
+        // Niente picker, calcoliamo lo split in tempo reale.
+        const initialQty = p.isCoffee ? p.usedByShifts.length * 5 : 10;
+
+        modal(`📥 Carico: ${escapeHtml(p.name)}`, `
+            ${p.isCoffee ? `
+                <div class="alert alert-warn"><strong>☕ Caffè</strong><br>Quantità divisa automaticamente tra i turni: <strong>${p.usedByShifts.join(', ')}</strong></div>
+            ` : `
+                <div class="alert alert-info"><strong>📦 Prodotto comune</strong><br>La giacenza è condivisa tra tutti i turni.</div>
+            `}
+            <div class="form-group"><label>Quantità acquistata (pz)</label>
+                <input type="number" id="mc-qty" min="1" value="${initialQty}">
+            </div>
+            <div class="form-group"><label>Importo speso (€)</label>
+                <input type="number" id="mc-amt" step="0.01" min="0" value="0.00">
+            </div>
+            <div class="form-group"><label>Nota (opzionale)</label>
+                <input type="text" id="mc-note" placeholder="Es: Lidl, Conad, sconto promo...">
+            </div>
+            <div id="mc-split-preview"></div>
+            <div class="alert alert-info text-sm">
+                Cassa attuale: <strong>€${this.cashRegister.toFixed(2)}</strong><br>
+                <span id="mc-cash-preview">Inserisci l'importo per vedere il nuovo saldo</span>
+            </div>
+            <button class="btn btn-blue btn-full" onclick="App.doCarico('${p.id}')">✅ Conferma Carico</button>
+        `);
+
+        const update = () => {
+            const qty = parseInt(document.getElementById('mc-qty').value)||0;
+            const amt = parseFloat(document.getElementById('mc-amt').value)||0;
+            // Preview split per coffee
+            if (p.isCoffee && qty > 0) {
+                const split = splitQty(qty, p.usedByShifts);
+                document.getElementById('mc-split-preview').innerHTML = `
+                    <div class="split-preview">
+                        <div style="font-weight:700;margin-bottom:0.3rem">Distribuzione automatica:</div>
+                        ${p.usedByShifts.map(s => `<div class="row"><span>Turno ${s} (${(p.shiftStock[s]||0)} → ${(p.shiftStock[s]||0)+split[s]})</span><strong>+${split[s]}</strong></div>`).join('')}
+                    </div>`;
+            } else if (!p.isCoffee && qty > 0) {
+                document.getElementById('mc-split-preview').innerHTML = `
+                    <div class="split-preview">
+                        <div class="row"><span>Stock attuale</span><strong>${p.stock}</strong></div>
+                        <div class="row"><span>Dopo carico</span><strong>${p.stock + qty}</strong></div>
+                    </div>`;
+            } else {
+                document.getElementById('mc-split-preview').innerHTML = '';
+            }
+            const newCash = this.cashRegister - amt;
+            document.getElementById('mc-cash-preview').innerHTML = amt > 0 ?
+                `Dopo il carico: <strong style="color:${newCash<0?'#dc2626':'#16a34a'}">€${newCash.toFixed(2)}</strong>${newCash<0?' ⚠️':''}` :
+                `Inserisci l'importo per vedere il nuovo saldo`;
+        };
+        document.getElementById('mc-qty').oninput = update;
+        document.getElementById('mc-amt').oninput = update;
+        update();
+    },
+
+    async doCarico(prodId) {
+        const p = this.products.find(x => x.id === prodId);
+        if (!p) return;
+        const qty = parseInt(document.getElementById('mc-qty').value)||0;
+        const amt = parseFloat(document.getElementById('mc-amt').value)||0;
+        const note = document.getElementById('mc-note').value.trim();
+
+        if (qty <= 0) { alert('Quantità non valida'); return; }
+        if (amt < 0) { alert('Importo non valido'); return; }
+
+        let distribution = null, summary = '';
+        if (p.isCoffee) {
+            if (!p.usedByShifts || p.usedByShifts.length === 0) {
+                alert('Questo caffè non ha turni configurati. Vai in Magazzino → Modifica per impostarli.');
+                return;
+            }
+            const split = splitQty(qty, p.usedByShifts);
+            distribution = p.usedByShifts.map(s => `${s}:+${split[s]}`).join(', ');
+            summary = '\n\nDistribuzione: ' + distribution;
+        } else {
+            summary = `\n\nStock: ${p.stock} → ${p.stock+qty}`;
+        }
+
+        if (!confirm(`Conferma carico:\n\n${p.name}\n+${qty} pz · -€${amt.toFixed(2)} dalla cassa${summary}\n\nProcedere?`)) return;
+
+        if (p.isCoffee) {
+            const split = splitQty(qty, p.usedByShifts);
+            p.usedByShifts.forEach(s => { p.shiftStock[s] = (p.shiftStock[s]||0) + split[s]; });
+        } else {
+            p.stock += qty;
+        }
+
+        this.cashRegister -= amt;
+
+        this.purchases.unshift({
+            id: uid(),
+            description: note || `Carico ${p.name}${distribution?` (${distribution})`:''}`,
+            amount: amt, qty,
+            productId: p.id, productName: p.name,
+            isCoffee: !!p.isCoffee,
+            distribution: distribution,
+            date: new Date().toISOString(),
+            registeredBy: Auth.user.name,
+            registeredByUid: Auth.user.uid
+        });
+
+        await this.save();
+        modalClose();
+        alert(`✅ Carico registrato!\n\n+${qty} pz di ${p.name}\n-€${amt.toFixed(2)} dalla cassa${summary}`);
+    },
+
+    page_storico() {
+        const me = this.myMember();
+        const myTx = me ? this.transactions.filter(t => t.memberId === me.id).sort((a,b) => new Date(b.date)-new Date(a.date)) : [];
+        return `
+            <h2>📋 Il mio Storico</h2>
+            ${!me ? '<div class="alert alert-warn">Account non collegato.</div>' : ''}
+            ${myTx.length === 0 ? '<p class="text-center text-gray" style="padding:2rem">Nessuna transazione</p>' :
+                myTx.map(t => `
+                    <div class="tx-item ${t.paid?'paid':'unpaid'}">
+                        <div><strong>${escapeHtml(t.productName)}</strong>${t.shift?` <span class="chip chip-shift">${t.shift}</span>`:''}<br><span class="text-sm text-gray">${fmt(t.date)}</span></div>
+                        <div style="text-align:right"><strong>€${t.price.toFixed(2)}</strong><br>
+                        <span class="chip ${t.paid?'chip-green':'chip-orange'}">${t.paid?'✓ Pagato':'⏳ Credito'}</span></div>
+                    </div>`).join('')}`;
+    },
+
+    // ========================================================
+    // PAGINE ADMIN
+    // ========================================================
+    page_dashboard() {
+        const totalDebt = this.members.reduce((s,m) => s + (m.balance||0), 0);
+        const today = new Date().toDateString();
+        const todayTx = this.transactions.filter(t => new Date(t.date).toDateString() === today);
+        const todayRev = todayTx.reduce((s,t) => s + t.price, 0);
+        const lowStock = this.products.filter(p => !p.isCoffee && p.stock <= 5 && p.stock > 0);
+        const outStock = this.products.filter(p => !p.isCoffee && p.stock <= 0);
+        const coffeeProducts = this.products.filter(p => p.isCoffee);
+
+        return `
+            <h2>📊 Dashboard</h2>
+            <div class="stats-row">
+                <div class="stat-card"><div class="label">💰 Cassa</div><div class="value" style="color:#16a34a">€${this.cashRegister.toFixed(2)}</div></div>
+                <div class="stat-card"><div class="label">📊 Crediti</div><div class="value" style="color:#ea580c">€${totalDebt.toFixed(2)}</div></div>
+                <div class="stat-card"><div class="label">🛒 Vendite oggi</div><div class="value" style="color:#3b82f6">${todayTx.length}</div></div>
+                <div class="stat-card"><div class="label">💵 Incasso oggi</div><div class="value" style="color:#16a34a">€${todayRev.toFixed(2)}</div></div>
+            </div>
+
+            ${coffeeProducts.length > 0 ? `
+                <h3>☕ Caffè per turno</h3>
+                ${coffeeProducts.map(p => `
+                    <div style="border:2px solid #fbbf24;border-radius:0.5rem;padding:0.85rem;margin-bottom:0.6rem;background:#fffbeb">
+                        <div class="flex-between">
+                            <strong>${escapeHtml(p.name)}</strong>
+                            <span class="text-sm text-gray">Turni: ${p.usedByShifts.join('/')}</span>
+                        </div>
+                        <div class="shift-stock-grid">
+                            ${SHIFTS.map(s => {
+                                const used = p.usedByShifts.includes(s);
+                                const v = p.shiftStock[s]||0;
+                                return `<div class="shift-stock-cell ${!used?'disabled':''}">
+                                    <div class="lbl">T${s}</div>
+                                    <div class="val" style="color:${!used?'#9ca3af':v<=5?'#ea580c':'#16a34a'}">${used?v:'—'}</div>
+                                </div>`;
+                            }).join('')}
+                        </div>
+                    </div>`).join('')}
+            ` : '<div class="alert alert-info">Nessun prodotto caffè configurato. Vai in 📦 Magazzino per crearne uno.</div>'}
+
+            <div class="alert alert-info">
+                Cassa: <strong>€${this.cashRegister.toFixed(2)}</strong> · Crediti: <strong>€${totalDebt.toFixed(2)}</strong> · Totale previsto: <strong>€${(this.cashRegister+totalDebt).toFixed(2)}</strong>
+            </div>
+            ${lowStock.length > 0 ? `<div class="alert alert-warn">⚠️ Scorte basse: ${lowStock.map(p=>escapeHtml(p.name)+' ('+p.stock+')').join(', ')}</div>` : ''}
+            ${outStock.length > 0 ? `<div class="alert alert-danger">❌ Esauriti: ${outStock.map(p=>escapeHtml(p.name)).join(', ')}</div>` : ''}
+
+            <h3>Ultime vendite</h3>
+            ${this.transactions.slice(-10).reverse().map(t => `
+                <div class="tx-item ${t.paid?'paid':'unpaid'}">
+                    <div><strong>${escapeHtml(t.memberName)}</strong> → ${escapeHtml(t.productName)}${t.shift?` <span class="chip chip-shift">${t.shift}</span>`:''}<br><span class="text-sm text-gray">${fmt(t.date)}</span></div>
+                    <div style="text-align:right"><strong>€${t.price.toFixed(2)}</strong><br>
+                    <span class="chip ${t.paid?'chip-green':'chip-orange'}">${t.paid?'Contanti':'Credito'}</span></div>
+                </div>`).join('')}`;
+    },
+
+    // ---- VENDITA (admin) ----
+    _saleSelected: '',
+    page_vendita() {
+        if (this.members.length === 0) return '<div class="alert alert-warn">Nessun vigile registrato. Vai a Vigili.</div>';
+        const sel = this.members.find(m => m.id === this._saleSelected);
+        return `
+            <h2>🛒 Registra Vendita</h2>
+            <div class="mb-2">
+                <label class="text-sm" style="font-weight:600;display:block;margin-bottom:0.25rem">Seleziona Vigile:</label>
+                <select onchange="App._saleSelected=this.value;App.renderContent()">
+                    <option value="">-- Scegli vigile --</option>
+                    ${this.members.sort((a,b)=>a.name.localeCompare(b.name)).map(m =>
+                        `<option value="${m.id}" ${this._saleSelected===m.id?'selected':''}>${escapeHtml(m.name)}${m.shift?' [T'+m.shift+']':''}${(m.balance||0)>0?' (€'+m.balance.toFixed(2)+')':''}</option>`
+                    ).join('')}
+                </select>
+            </div>
+            ${!sel ? '<p class="text-center text-gray" style="padding:2rem">Seleziona un vigile per registrare la vendita</p>' : `
+                <div class="alert alert-info mb-2">
+                    <strong>${escapeHtml(sel.name)}</strong>${sel.shift?` <span class="chip chip-shift">Turno ${sel.shift}</span>`:' <span class="chip chip-orange">⚠️ senza turno</span>'}<br>
+                    Debito: <strong style="color:${(sel.balance||0)>0?'#dc2626':'#16a34a'}">€${(sel.balance||0).toFixed(2)}</strong>
+                </div>
+                <div class="product-grid">
+                    ${this.products.filter(p => !p.isCoffee || (sel.shift && p.usedByShifts.includes(sel.shift))).map(p => {
+                        const stock = p.isCoffee ? (p.shiftStock[sel.shift]||0) : p.stock;
+                        const canSell = stock > 0 && (!p.isCoffee || sel.shift);
+                        return `<div class="p-card ${p.isCoffee?'coffee':''}" style="${!canSell?'opacity:0.45':''}">
+                            <div class="name">${escapeHtml(p.name)}${p.isCoffee?'<span class="coffee-tag">CAFFÈ</span>':''}</div>
+                            <div class="price">€${p.price.toFixed(2)}</div>
+                            <div class="stock ${stock<=0?'stock-out':stock<=5?'stock-low':'stock-ok'}">${
+                                p.isCoffee ? `Turno ${sel.shift}: ${stock}` : `Stock: ${stock}`
+                            }</div>
+                            ${canSell ? `<div class="flex">
+                                <button class="btn btn-orange btn-sm" style="flex:1" onclick="App.adminSell('${p.id}',false)">Credito</button>
+                                <button class="btn btn-green btn-sm" style="flex:1" onclick="App.adminSell('${p.id}',true)">Paga</button>
+                            </div>` : '<div class="text-center stock-out" style="font-weight:600;padding:0.3rem">ESAURITO</div>'}
+                        </div>`;
+                    }).join('')}
+                </div>
+                ${this.products.filter(p => p.isCoffee && sel.shift && !p.usedByShifts.includes(sel.shift)).length > 0 ? `
+                    <p class="text-sm text-gray mt-2" style="margin-top:1rem">
+                        ℹ️ Non mostrati: caffè per altri turni (${this.products.filter(p => p.isCoffee && sel.shift && !p.usedByShifts.includes(sel.shift)).map(p=>escapeHtml(p.name)).join(', ')})
+                    </p>
+                ` : ''}
+            `}`;
+    },
+
+    async adminSell(prodId, payNow) {
+        const member = this.members.find(m => m.id === this._saleSelected);
+        const prod = this.products.find(p => p.id === prodId);
+        if (!member || !prod) return;
+        if (prod.isCoffee && !member.shift) { alert('Il vigile non ha un turno assegnato.'); return; }
+        if (prod.isCoffee && !prod.usedByShifts.includes(member.shift)) { alert(`Questo caffè non è del turno ${member.shift}.`); return; }
+
+        if (prod.isCoffee) {
+            if ((prod.shiftStock[member.shift]||0) <= 0) { alert(`Caffè esaurito nel turno ${member.shift}!`); return; }
+            prod.shiftStock[member.shift]--;
+        } else {
+            if (prod.stock <= 0) { alert('Esaurito!'); return; }
+            prod.stock--;
+        }
+
+        this.transactions.push({
+            id: uid(), memberId: member.id, memberName: member.name,
+            productId: prod.id, productName: prod.name,
+            price: prod.price, date: new Date().toISOString(),
+            paid: payNow, shift: prod.isCoffee ? member.shift : null,
+            isCoffee: !!prod.isCoffee,
+            registeredBy: Auth.user.name, registeredByUid: Auth.user.uid
+        });
+        if (payNow) this.cashRegister += prod.price;
+        else member.balance = (member.balance||0) + prod.price;
+
+        await this.save();
+        alert(`✅ ${prod.name} → ${member.name} (${payNow?'pagato':'credito'})`);
+    },
+
+    // ---- MAGAZZINO (admin) ----
+    page_magazzino() {
+        const totalVal = this.products.reduce((s,p) => s + p.price * this.productTotalStock(p), 0);
+        const totalPz = this.products.reduce((s,p) => s + this.productTotalStock(p), 0);
+        return `
+            <h2>📦 Magazzino</h2>
+            <div class="stats-row">
+                <div class="stat-card"><div class="label">Prodotti</div><div class="value" style="color:#3b82f6">${this.products.length}</div></div>
+                <div class="stat-card"><div class="label">Pezzi totali</div><div class="value" style="color:#16a34a">${totalPz}</div></div>
+                <div class="stat-card"><div class="label">Valore vendita</div><div class="value">€${totalVal.toFixed(2)}</div></div>
+            </div>
+            <div class="flex-between mb-2">
+                <h3 style="margin:0">Prodotti</h3>
+                <button class="btn btn-red btn-sm" onclick="App.modalProduct()">+ Nuovo</button>
+            </div>
+            ${this.products.map(p => {
+                const total = this.productTotalStock(p);
+                return `<div class="member-item">
+                    <div style="flex:1;min-width:0">
+                        <strong>${escapeHtml(p.name)}</strong>${p.isCoffee?` <span class="coffee-tag">CAFFÈ ${p.usedByShifts.join('/')}</span>`:''} — €${p.price.toFixed(2)}<br>
+                        ${p.isCoffee ? `
+                            <div class="shift-stock-grid">
+                                ${SHIFTS.map(s => {
+                                    const used = p.usedByShifts.includes(s);
+                                    return `<div class="shift-stock-cell ${!used?'disabled':''}">
+                                        <div class="lbl">T${s}</div>
+                                        <div class="val">${used?(p.shiftStock[s]||0):'—'}</div>
+                                    </div>`;
+                                }).join('')}
+                            </div>
+                            <span class="text-sm" style="font-weight:600">Totale: ${total} pz</span>
+                        ` : `<span class="text-sm ${p.stock<=0?'stock-out':p.stock<=5?'stock-low':'stock-ok'}" style="font-weight:600">${p.stock} pz</span>`}
+                    </div>
+                    <div class="flex" style="flex-shrink:0;flex-wrap:wrap">
+                        <button class="btn btn-blue btn-sm" title="Carico (auto-split per caffè)" onclick="App.modalCarico('${p.id}')">📥</button>
+                        ${p.isCoffee ? `<button class="btn btn-orange btn-sm" title="Aggiusta giacenze per turno" onclick="App.modalAdjustCoffee('${p.id}')">⚙️</button>` : ''}
+                        <button class="btn btn-gray btn-sm" title="Modifica" onclick="App.modalProduct('${p.id}')">✏️</button>
+                        <button class="btn btn-sm" style="background:#fee2e2;color:#dc2626" title="Elimina" onclick="App.deleteProduct('${p.id}')">🗑️</button>
+                    </div>
+                </div>`;
+            }).join('')}
+            ${this.products.length===0?'<p class="text-center text-gray" style="padding:2rem">Nessun prodotto</p>':''}`;
+    },
+
+    modalProduct(id) {
+        const p = id ? this.products.find(x=>x.id===id) : null;
+        const isCoffee = p ? !!p.isCoffee : false;
+        const usedByShifts = p && p.isCoffee ? p.usedByShifts : [...SHIFTS];
+
+        modal(p ? 'Modifica Prodotto' : 'Nuovo Prodotto', `
+            <div class="form-group"><label>Nome</label><input id="mp-name" value="${p?escapeAttr(p.name):''}" placeholder="Es: Condorelli, Trinca, Coca-cola..."></div>
+            <div class="flex mb-1">
+                <div class="form-group" style="flex:1"><label>Prezzo €</label><input type="number" id="mp-price" step="0.10" min="0" value="${p?p.price:'0.50'}"></div>
+                ${!isCoffee ? `<div class="form-group" style="flex:1"><label>Stock iniziale</label><input type="number" id="mp-stock" min="0" value="${p?p.stock:'0'}"></div>` : ''}
+            </div>
+            <label class="toggle-row mb-1">
+                <input type="checkbox" id="mp-coffee" ${isCoffee?'checked':''} ${p&&isCoffee?'disabled':''} onchange="App._toggleCoffeeFields(this.checked)">
+                <span>☕ <strong>È un caffè</strong> — giacenza divisa per turno</span>
+            </label>
+            <div id="mp-coffee-fields" class="${isCoffee?'':'hidden'}" style="margin-bottom:1rem">
+                <label class="text-sm" style="font-weight:600;display:block;margin-bottom:0.4rem">Turni che usano questo caffè:</label>
+                <div class="multi-shift-picker">
+                    ${SHIFTS.map(s => `<div class="multi-shift-opt ${usedByShifts.includes(s)?'selected':''}" data-shift="${s}" onclick="App._toggleMultiShift('${s}')">${s}</div>`).join('')}
+                </div>
+                <p class="text-sm text-gray" style="margin-top:0.4rem">
+                    Es: Condorelli → A, C, D · Trinca → B<br>
+                    Quando si carica, la quantità è divisa <strong>in parti uguali</strong> tra questi turni.
+                </p>
+            </div>
+            ${p && isCoffee ? '<div class="alert alert-warn text-sm">⚠️ Le giacenze attuali si modificano col bottone ⚙️ in magazzino. Qui puoi modificare i turni che lo usano (lo stock dei turni rimossi NON viene cancellato).</div>' : ''}
+            <button class="btn btn-red btn-full" onclick="App.saveProduct('${id||''}')">${p?'Salva':'Aggiungi'}</button>
+        `);
+        // Stato locale dei turni selezionati
+        this._modalUsedByShifts = new Set(usedByShifts);
+    },
+
+    _toggleCoffeeFields(checked) {
+        document.getElementById('mp-coffee-fields').classList.toggle('hidden', !checked);
+    },
+
+    _toggleMultiShift(s) {
+        if (!this._modalUsedByShifts) this._modalUsedByShifts = new Set();
+        if (this._modalUsedByShifts.has(s)) this._modalUsedByShifts.delete(s);
+        else this._modalUsedByShifts.add(s);
+        document.querySelectorAll('.multi-shift-opt').forEach(el => {
+            el.classList.toggle('selected', this._modalUsedByShifts.has(el.dataset.shift));
+        });
+    },
+
+    async saveProduct(editId) {
+        const name = document.getElementById('mp-name').value.trim();
+        const price = parseFloat(document.getElementById('mp-price').value)||0;
+        const isCoffee = document.getElementById('mp-coffee').checked;
+        const stockEl = document.getElementById('mp-stock');
+        const stock = stockEl ? (parseInt(stockEl.value)||0) : 0;
+        if (!name) { alert('Nome obbligatorio'); return; }
+        if (price <= 0) { alert('Prezzo non valido'); return; }
+
+        let usedByShifts = null;
+        if (isCoffee) {
+            usedByShifts = Array.from(this._modalUsedByShifts || []).sort();
+            if (usedByShifts.length === 0) { alert('Seleziona almeno un turno per il caffè'); return; }
+        }
+
+        if (editId) {
+            const p = this.products.find(x=>x.id===editId);
+            if (p) {
+                p.name = name;
+                p.price = price;
+                if (p.isCoffee) {
+                    p.usedByShifts = usedByShifts;
+                } else {
+                    p.stock = stock;
+                }
+            }
+        } else {
+            if (isCoffee) {
+                this.products.push({ id: uid(), name, price, isCoffee: true, usedByShifts, stock: 0, shiftStock: {A:0,B:0,C:0,D:0} });
+            } else {
+                this.products.push({ id: uid(), name, price, isCoffee: false, usedByShifts: null, stock, shiftStock: null });
+            }
+        }
+        await this.save();
+        modalClose();
+    },
+
+    modalAdjustCoffee(id) {
+        const p = this.products.find(x => x.id === id);
+        if (!p || !p.isCoffee) return;
+        modal(`⚙️ Aggiusta giacenza: ${escapeHtml(p.name)}`, `
+            <div class="alert alert-warn"><strong>Modifica diretta delle giacenze per turno.</strong><br>Usa solo per correzioni (es. inventario fisico). Le modifiche vengono registrate nello storico.</div>
+            <p class="text-sm text-gray mb-1">Turni configurati: <strong>${p.usedByShifts.join('/')}</strong></p>
+            ${SHIFTS.map(s => `
+                <div class="form-group">
+                    <label>Turno ${s} ${p.usedByShifts.includes(s)?'':'<span class="text-sm text-gray">(non usa questo caffè)</span>'} (attuale: ${p.shiftStock[s]||0})</label>
+                    <input type="number" id="mac-${s}" min="0" value="${p.shiftStock[s]||0}">
+                </div>
+            `).join('')}
+            <div class="form-group">
+                <label>Motivo (registrato nello storico)</label>
+                <input type="text" id="mac-reason" placeholder="Es: inventario fisico, correzione errore...">
+            </div>
+            <button class="btn btn-orange btn-full" onclick="App.doAdjustCoffee('${id}')">Salva correzione</button>
+        `);
+    },
+
+    async doAdjustCoffee(id) {
+        const p = this.products.find(x => x.id === id);
+        if (!p) return;
+        const reason = document.getElementById('mac-reason').value.trim() || 'Correzione manuale';
+        const oldStock = {...p.shiftStock};
+        const newStock = {};
+        let changed = false;
+        for (const s of SHIFTS) {
+            const v = parseInt(document.getElementById('mac-' + s).value);
+            if (isNaN(v) || v < 0) { alert(`Valore non valido per turno ${s}`); return; }
+            newStock[s] = v;
+            if (v !== oldStock[s]) changed = true;
+        }
+        if (!changed) { modalClose(); return; }
+        const summary = SHIFTS.map(s => `T${s}: ${oldStock[s]||0} → ${newStock[s]}`).join(', ');
+        if (!confirm(`Confermi correzione?\n\n${p.name}: ${summary}\nMotivo: ${reason}`)) return;
+
+        p.shiftStock = newStock;
+        this.purchases.unshift({
+            id: uid(),
+            description: `🔧 Correzione ${p.name}: ${summary} — ${reason}`,
+            amount: 0, qty: 0,
+            productId: p.id, productName: p.name,
+            isCoffee: true, isAdjustment: true,
+            date: new Date().toISOString(),
+            registeredBy: Auth.user.name, registeredByUid: Auth.user.uid
+        });
+        await this.save();
+        modalClose();
+        alert('✅ Giacenze aggiornate.');
+    },
+
+    async deleteProduct(id) {
+        const p = this.products.find(x=>x.id===id);
+        if (!p) return;
+        if (!confirm(`Eliminare "${p.name}"?`)) return;
+        this.products = this.products.filter(x=>x.id!==id);
+        await this.save();
+    },
+
+    // ---- CONTI (admin) ----
+    page_conti() {
+        const sorted = [...this.members].sort((a,b) => (b.balance||0) - (a.balance||0));
+        const totalDebt = sorted.reduce((s,m) => s + (m.balance||0), 0);
+        const debtors = sorted.filter(m => (m.balance||0) > 0);
+
+        return `
+            <h2>💰 Gestione Conti</h2>
+            <div class="stats-row">
+                <div class="stat-card"><div class="label">Con debito</div><div class="value" style="color:#ea580c">${debtors.length}</div></div>
+                <div class="stat-card"><div class="label">Crediti totali</div><div class="value" style="color:#dc2626">€${totalDebt.toFixed(2)}</div></div>
+            </div>
+            ${sorted.map(m => `
+                <div class="member-item ${(m.balance||0)>0?'has-debt':''}">
+                    <div>
+                        <strong>${escapeHtml(m.name)}</strong>${m.shift?` <span class="chip chip-shift">${m.shift}</span>`:''}<br>
+                        <span class="text-sm" style="color:${(m.balance||0)>0?'#dc2626':'#16a34a'};font-weight:600">€${(m.balance||0).toFixed(2)}</span>
+                    </div>
+                    <div class="flex">
+                        ${(m.balance||0) > 0 ? `<button class="btn btn-green btn-sm" onclick="App.modalPay('${m.id}')">💵 Paga</button>` : ''}
+                        <button class="btn btn-gray btn-sm" onclick="App.modalHistory('${m.id}')">📋</button>
+                    </div>
+                </div>`).join('')}
+            ${sorted.length===0?'<p class="text-center text-gray" style="padding:2rem">Nessun vigile</p>':''}`;
+    },
+
+    modalPay(id) {
+        const m = this.members.find(x=>x.id===id);
+        if (!m) return;
+        modal(`💵 Pagamento: ${escapeHtml(m.name)}`, `
+            <div class="alert alert-info">Debito: <strong style="color:#dc2626">€${(m.balance||0).toFixed(2)}</strong></div>
+            <div class="form-group"><label>Importo (€)</label>
+                <input type="number" id="pay-amt" step="0.50" min="0.50" max="${(m.balance||0).toFixed(2)}" value="${(m.balance||0).toFixed(2)}">
+            </div>
+            <div class="flex">
+                <button class="btn btn-green" style="flex:1" onclick="App.doPay('${id}',false)">Paga importo</button>
+                <button class="btn btn-red" style="flex:1" onclick="App.doPay('${id}',true)">Salda tutto</button>
+            </div>
+        `);
+    },
+
+    async doPay(id, payAll) {
+        const m = this.members.find(x=>x.id===id);
+        if (!m) return;
+        let amount = payAll ? (m.balance||0) : (parseFloat(document.getElementById('pay-amt').value)||0);
+        if (amount <= 0) { alert('Importo non valido'); return; }
+        if (amount > (m.balance||0)) amount = m.balance;
+        if (!confirm(`Confermi pagamento €${amount.toFixed(2)} da ${m.name}?`)) return;
+
+        m.balance = (m.balance||0) - amount;
+        if (m.balance < 0.01) m.balance = 0;
+        if (m.balance === 0) {
+            this.transactions.forEach(t => { if (t.memberId===id && !t.paid) t.paid = true; });
+        }
+        this.cashRegister += amount;
+        await this.save(); modalClose();
+        alert(`✅ Pagamento €${amount.toFixed(2)} registrato!`);
+    },
+
+    modalHistory(id) {
+        const m = this.members.find(x=>x.id===id);
+        if (!m) return;
+        const tx = this.transactions.filter(t=>t.memberId===id).sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,25);
+        modal(`📋 ${escapeHtml(m.name)}`, `
+            <div class="alert alert-info">Debito: <strong style="color:${(m.balance||0)>0?'#dc2626':'#16a34a'}">€${(m.balance||0).toFixed(2)}</strong></div>
+            ${tx.length===0?'<p class="text-center text-gray">Nessuna transazione</p>':
+                tx.map(t=>`<div class="tx-item ${t.paid?'paid':'unpaid'}" style="font-size:0.85rem">
+                    <div><strong>${escapeHtml(t.productName)}</strong>${t.shift?` <span class="chip chip-shift">${t.shift}</span>`:''}<br><span class="text-gray">${fmt(t.date)}</span></div>
+                    <div style="text-align:right"><strong>€${t.price.toFixed(2)}</strong><br>
+                    <span class="chip ${t.paid?'chip-green':'chip-orange'}">${t.paid?'Pagato':'Credito'}</span></div>
+                </div>`).join('')}
+        `);
+    },
+
+    // ---- CASSA (admin) ----
+    page_cassa() {
+        const allTx = [...this.transactions].sort((a,b) => new Date(b.date)-new Date(a.date));
+        const totalDebt = this.members.reduce((s,m) => s + (m.balance||0), 0);
+
+        return `
+            <h2>💵 Cassa</h2>
+            <div class="stats-row">
+                <div class="stat-card" style="background:#d1fae5"><div class="label">💰 In cassa</div><div class="value" style="color:#16a34a">€${this.cashRegister.toFixed(2)}</div></div>
+                <div class="stat-card" style="background:#ffedd5"><div class="label">📊 Crediti</div><div class="value" style="color:#ea580c">€${totalDebt.toFixed(2)}</div></div>
+                <div class="stat-card" style="background:#dbeafe"><div class="label">📈 Previsto</div><div class="value" style="color:#2563eb">€${(this.cashRegister+totalDebt).toFixed(2)}</div></div>
+            </div>
+            <div class="flex mb-2">
+                <button class="btn btn-green" style="flex:1" onclick="App.modalCashEdit()">✏️ Modifica Cassa</button>
+                <button class="btn btn-red" style="flex:1" onclick="App.modalPurchase()">📝 Spesa Generica</button>
+            </div>
+
+            <h3>🛒 Carichi e spese</h3>
+            ${this.purchases.length===0?'<p class="text-center text-gray mb-2">Nessuna registrazione</p>':
+                this.purchases.slice(0,20).map(p=>`
+                    <div class="tx-item ${p.productId?'carico':'expense'}">
+                        <div>
+                            <strong>${escapeHtml(p.description)}</strong>
+                            ${p.qty?` <span class="chip chip-blue">+${p.qty} pz</span>`:''}
+                            <br><span class="text-sm text-gray">${fmt(p.date)} · ${escapeHtml(p.registeredBy||'')}</span>
+                        </div>
+                        <div style="text-align:right"><strong style="color:#dc2626">${p.amount>0?'-€'+p.amount.toFixed(2):'—'}</strong></div>
+                    </div>`).join('')}
+
+            <div class="divider"></div>
+            <h3>📊 Storico vendite</h3>
+            ${allTx.length===0?'<p class="text-center text-gray">Nessuna vendita</p>':
+                allTx.slice(0,30).map(t=>`
+                    <div class="tx-item ${t.paid?'paid':'unpaid'}">
+                        <div><strong>${escapeHtml(t.memberName)}</strong> → ${escapeHtml(t.productName)}${t.shift?` <span class="chip chip-shift">${t.shift}</span>`:''}<br><span class="text-sm text-gray">${fmt(t.date)}</span></div>
+                        <div style="text-align:right"><strong>€${t.price.toFixed(2)}</strong><br>
+                        <span class="chip ${t.paid?'chip-green':'chip-orange'}">${t.paid?'Pagato':'Credito'}</span></div>
+                    </div>`).join('')}`;
+    },
+
+    modalCashEdit() {
+        modal('✏️ Modifica Cassa', `
+            <div class="alert alert-info">Saldo attuale: <strong>€${this.cashRegister.toFixed(2)}</strong></div>
+            <div class="form-group"><label>Nuovo importo (€)</label>
+                <input type="number" id="ce-amt" step="0.50" value="${this.cashRegister.toFixed(2)}">
+            </div>
+            <button class="btn btn-green btn-full" onclick="App.doCashEdit()">Salva</button>
+        `);
+    },
+
+    async doCashEdit() {
+        const val = parseFloat(document.getElementById('ce-amt').value);
+        if (isNaN(val)) { alert('Importo non valido'); return; }
+        this.cashRegister = val;
+        await this.save(); modalClose();
+        alert('✅ Cassa aggiornata!');
+    },
+
+    modalPurchase() {
+        modal('📝 Spesa Generica', `
+            <div class="alert alert-info">Per spese non legate a un prodotto specifico (utenze, manutenzione...). Per i carichi merce usa la sezione 📥 Carico.</div>
+            <div class="form-group"><label>Descrizione</label><input id="pu-desc" placeholder="Es: bollette, riparazione..."></div>
+            <div class="form-group"><label>Importo (€)</label><input type="number" id="pu-amt" step="0.50" min="0.50" placeholder="0.00"></div>
+            <button class="btn btn-red btn-full" onclick="App.doPurchase()">Registra</button>
+        `);
+    },
+
+    async doPurchase() {
+        const desc = document.getElementById('pu-desc').value.trim();
+        const amt = parseFloat(document.getElementById('pu-amt').value)||0;
+        if (!desc) { alert('Inserisci descrizione'); return; }
+        if (amt <= 0) { alert('Importo non valido'); return; }
+
+        this.purchases.unshift({
+            id: uid(), description: desc, amount: amt, qty: 0,
+            productId: null, productName: null, isCoffee: false,
+            date: new Date().toISOString(),
+            registeredBy: Auth.user.name, registeredByUid: Auth.user.uid
+        });
+        this.cashRegister -= amt;
+        await this.save(); modalClose();
+        alert('✅ Spesa registrata!');
+    },
+
+    // ---- VIGILI (admin) ----
+    page_vigili() {
+        const sorted = [...this.members].sort((a,b) => a.name.localeCompare(b.name));
+        return `
+            <h2>👥 Gestione Vigili</h2>
+            <div class="alert alert-info text-sm">Aggiungi un vigile, opzionalmente con turno. Il collegamento all'account avviene in 🕐 Turni.</div>
+            <div class="flex mb-2">
+                <input type="text" id="new-vig" placeholder="Nome e Cognome" style="flex:2">
+                <select id="new-vig-shift" style="flex:1">
+                    <option value="">Turno?</option>
+                    ${SHIFTS.map(s => `<option value="${s}">T${s}</option>`).join('')}
+                </select>
+                <button class="btn btn-red" onclick="App.addVigile()">+ Aggiungi</button>
+            </div>
+            ${sorted.map(m => `
+                <div class="member-item ${(m.balance||0)>0?'has-debt':''} ${!m.shift?'no-shift':''}">
+                    <div>
+                        <strong>${escapeHtml(m.name)}</strong>
+                        ${m.shift ? `<span class="chip chip-shift">T${m.shift}</span>` : '<span class="chip chip-orange">⚠️ NO TURNO</span>'}
+                        ${m.userId ? '<span class="chip chip-blue">🔗</span>' : ''}
+                        <br><span class="text-sm text-gray">Debito: €${(m.balance||0).toFixed(2)}</span>
+                    </div>
+                    <div class="flex">
+                        ${!m.userId?`<button class="btn btn-sm" style="background:#dbeafe;color:#1e40af" title="Collega account" onclick="App.modalLink('${m.id}')">🔗</button>`:''}
+                        <button class="btn btn-gray btn-sm" title="Modifica" onclick="App.editVigile('${m.id}')">✏️</button>
+                        <button class="btn btn-sm" style="background:#fee2e2;color:#dc2626" title="Elimina" onclick="App.deleteVigile('${m.id}')">🗑️</button>
+                    </div>
+                </div>`).join('')}
+            ${sorted.length===0?'<p class="text-center text-gray" style="padding:2rem">Nessun vigile</p>':''}`;
+    },
+
+    async addVigile() {
+        const input = document.getElementById('new-vig');
+        const shiftEl = document.getElementById('new-vig-shift');
+        const name = input ? input.value.trim() : '';
+        const shift = shiftEl ? shiftEl.value || null : null;
+        if (!name) { alert('Inserisci un nome!'); return; }
+        this.members.push({ id: uid(), name, balance: 0, userId: null, shift });
+        await this.save();
+    },
+
+    editVigile(id) {
+        const m = this.members.find(x=>x.id===id);
+        if (!m) return;
+        modal(`✏️ Modifica: ${escapeHtml(m.name)}`, `
+            <div class="form-group"><label>Nome</label>
+                <input id="ev-name" value="${escapeAttr(m.name)}">
+            </div>
+            <div class="form-group"><label>Turno</label>
+                <div class="shift-picker" id="ev-picker">
+                    ${SHIFTS.map(s => `<div class="shift-opt ${m.shift===s?'selected':''}" data-shift="${s}" onclick="App._evPickShift('${s}')">${s}</div>`).join('')}
+                </div>
+                <input type="hidden" id="ev-shift" value="${m.shift||''}">
+                ${m.shift ? `<button class="btn btn-gray btn-sm" style="margin-top:0.4rem" onclick="App._evPickShift(null)">Rimuovi turno</button>` : ''}
+            </div>
+            <button class="btn btn-red btn-full" onclick="App.saveVigileEdit('${id}')">Salva</button>
+        `);
+    },
+
+    _evPickShift(s) {
+        document.getElementById('ev-shift').value = s || '';
+        document.querySelectorAll('#ev-picker .shift-opt').forEach(el => {
+            el.classList.toggle('selected', el.dataset.shift === s);
+        });
+    },
+
+    async saveVigileEdit(id) {
+        const m = this.members.find(x=>x.id===id);
+        if (!m) return;
+        const newName = document.getElementById('ev-name').value.trim();
+        const newShift = document.getElementById('ev-shift').value || null;
+        if (!newName) { alert('Nome obbligatorio'); return; }
+        const oldName = m.name;
+        m.name = newName;
+        m.shift = newShift;
+        if (oldName !== newName) {
+            this.transactions.forEach(t => { if (t.memberId===id) t.memberName = newName; });
+        }
+        await this.save();
+        modalClose();
+    },
+
+    async deleteVigile(id) {
+        const m = this.members.find(x=>x.id===id);
+        if (!m) return;
+        if ((m.balance||0) > 0) {
+            if (!confirm(`${m.name} ha un debito di €${m.balance.toFixed(2)}!\nEliminare comunque?`)) return;
+        } else {
+            if (!confirm(`Eliminare ${m.name}?`)) return;
+        }
+        this.members = this.members.filter(x=>x.id!==id);
+        await this.save();
+    },
+
+    modalLink(memberId) {
+        const m = this.members.find(x=>x.id===memberId);
+        if (!m) return;
+        const unlinked = this.users.filter(u => !this.members.some(mem => mem.userId === u.uid));
+
+        modal(`🔗 Collega: ${escapeHtml(m.name)}`, `
+            <p class="text-sm text-gray mb-1">Collega un account registrato a questo vigile.</p>
+            ${unlinked.length === 0 ? '<div class="alert alert-warn">Nessun account disponibile. Devono prima registrarsi nell\'app.</div>' : `
+                <div class="form-group"><label>Seleziona utente</label>
+                    <select id="link-uid">
+                        <option value="">-- Seleziona --</option>
+                        ${unlinked.map(u => `<option value="${u.uid}">${escapeHtml(u.name)} (${escapeHtml(u.email)})${u.shift?' [T'+u.shift+']':''}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="alert alert-info text-sm">Il turno del vigile verrà allineato a quello dell'account selezionato.</div>
+                <button class="btn btn-red btn-full" onclick="App.doLink('${memberId}')">Collega</button>
+            `}
+        `);
+    },
+
+    async doLink(memberId) {
+        const userId = document.getElementById('link-uid').value;
+        if (!userId) { alert('Seleziona un utente'); return; }
+        const m = this.members.find(x=>x.id===memberId);
+        const u = this.users.find(x => x.uid === userId);
+        if (m) {
+            m.userId = userId;
+            if (u && u.shift) m.shift = u.shift;
+        }
+        await this.save();
+        modalClose();
+        alert('✅ Account collegato!');
+    },
+
+    // ---- TURNI (admin) ----
+    _turniTab: 'overview',
+    page_turni() {
+        return `
+            <h2>🕐 Gestione Turni</h2>
+            <div class="flex mb-2" style="flex-wrap:wrap">
+                <button class="btn ${this._turniTab==='overview'?'btn-red':'btn-gray'} btn-sm" onclick="App._turniTab='overview';App.renderContent()">📊 Riepilogo</button>
+                <button class="btn ${this._turniTab==='assign'?'btn-red':'btn-gray'} btn-sm" onclick="App._turniTab='assign';App.renderContent()">👥 Assegna Vigili</button>
+                <button class="btn ${this._turniTab==='coffee'?'btn-red':'btn-gray'} btn-sm" onclick="App._turniTab='coffee';App.renderContent()">☕ Distribuisci Caffè</button>
+            </div>
+            ${this._turniTab === 'overview' ? this._turniOverview() : ''}
+            ${this._turniTab === 'assign' ? this._turniAssign() : ''}
+            ${this._turniTab === 'coffee' ? this._turniCoffee() : ''}
+        `;
+    },
+
+    _turniOverview() {
+        const coffeeProducts = this.products.filter(p => p.isCoffee);
+        return SHIFTS.map(s => {
+            const members = this.members.filter(m => m.shift === s);
+            const totalDebt = members.reduce((sum, m) => sum + (m.balance||0), 0);
+            const coffees = coffeeProducts.filter(p => p.usedByShifts.includes(s)).map(p => ({ name: p.name, qty: p.shiftStock[s]||0 }));
+            const totalCoffee = coffees.reduce((sum, c) => sum + c.qty, 0);
+            const shiftSales = this.transactions.filter(t => t.shift === s).length;
+            return `
+                <div style="border:2px solid #e5e7eb;border-radius:0.5rem;padding:1rem;margin-bottom:1rem">
+                    <div class="flex-between mb-1">
+                        <h3 style="margin:0">Turno ${s}</h3>
+                        <span class="chip chip-blue">${members.length} vigili</span>
+                    </div>
+                    <div class="stats-row" style="margin-bottom:0.5rem">
+                        <div class="stat-card"><div class="label">☕ Caffè</div><div class="value" style="color:${totalCoffee<=10?'#ea580c':'#16a34a'};font-size:1.3rem">${totalCoffee}</div></div>
+                        <div class="stat-card"><div class="label">📊 Crediti</div><div class="value" style="color:#dc2626;font-size:1.3rem">€${totalDebt.toFixed(2)}</div></div>
+                        <div class="stat-card"><div class="label">🛒 Caffè venduti</div><div class="value" style="color:#3b82f6;font-size:1.3rem">${shiftSales}</div></div>
+                    </div>
+                    ${coffees.length > 0 ? `
+                        <div class="text-sm" style="margin-top:0.5rem">
+                            <strong>Per prodotto:</strong>
+                            ${coffees.map(c => `<span class="chip chip-gray" style="margin:0.15rem">${escapeHtml(c.name)}: ${c.qty}</span>`).join('')}
+                        </div>
+                    ` : '<p class="text-sm text-gray">Nessun caffè configurato per questo turno</p>'}
+                    ${members.length > 0 ? `
+                        <details style="margin-top:0.75rem">
+                            <summary class="text-sm" style="cursor:pointer;font-weight:600">Vigili turno ${s} (${members.length})</summary>
+                            <div style="margin-top:0.5rem">
+                                ${members.sort((a,b)=>a.name.localeCompare(b.name)).map(m => `
+                                    <div class="text-sm" style="padding:0.25rem 0">
+                                        ${escapeHtml(m.name)}${(m.balance||0)>0?` <span style="color:#dc2626">€${m.balance.toFixed(2)}</span>`:''}${m.userId?' 🔗':''}
+                                    </div>`).join('')}
+                            </div>
+                        </details>
+                    ` : '<p class="text-sm text-gray">Nessun vigile assegnato</p>'}
+                </div>
+            `;
+        }).join('');
+    },
+
+    _turniAssign() {
+        const noShift = this.members.filter(m => !m.shift);
+        const sorted = [...this.members].sort((a,b) => {
+            if (!a.shift && b.shift) return -1;
+            if (a.shift && !b.shift) return 1;
+            return a.name.localeCompare(b.name);
+        });
+
+        // Anche utenti registrati senza member collegato (orphans)
+        const orphanUsers = this.users.filter(u =>
+            u.role === 'user' && !this.members.some(m => m.userId === u.uid)
+        );
+
+        return `
+            <div class="alert alert-info">
+                <strong>Assegna un turno a ogni vigile.</strong><br>
+                I vigili senza turno non possono comprare il caffè (gli altri prodotti sì).
+            </div>
+            ${noShift.length > 0 ? `<div class="alert alert-warn">⚠️ <strong>${noShift.length}</strong> vigili senza turno</div>` : '<div class="alert alert-ok">✅ Tutti i vigili hanno un turno</div>'}
+            <div class="shift-assign-grid">
+                ${sorted.map(m => `
+                    <div class="shift-assign-row ${!m.shift?'no-shift':''}">
+                        <div style="flex:1;min-width:0">
+                            <strong>${escapeHtml(m.name)}</strong>
+                            ${m.userId?'<span class="chip chip-blue" style="margin-left:0.3rem">🔗 collegato</span>':'<span class="chip chip-gray" style="margin-left:0.3rem">non collegato</span>'}
+                            ${(m.balance||0)>0?`<br><span class="text-sm" style="color:#dc2626">Debito: €${m.balance.toFixed(2)}</span>`:''}
+                        </div>
+                        <div class="shift-buttons">
+                            ${SHIFTS.map(s => `<button class="shift-btn ${m.shift===s?'active':''}" onclick="App.assignShift('${m.id}','${s}')">${s}</button>`).join('')}
+                            ${m.shift?`<button class="shift-btn" style="color:#dc2626" onclick="App.assignShift('${m.id}',null)" title="Rimuovi turno">×</button>`:''}
+                        </div>
+                    </div>`).join('')}
+            </div>
+
+            ${orphanUsers.length > 0 ? `
+                <div class="divider"></div>
+                <h3>📱 Account registrati senza vigile collegato (${orphanUsers.length})</h3>
+                <p class="text-sm text-gray mb-1">Questi utenti si sono registrati ma non sono ancora associati a un vigile del bar. Vai in 👥 Vigili per collegarli.</p>
+                ${orphanUsers.map(u => `
+                    <div class="member-item">
+                        <div>
+                            <strong>${escapeHtml(u.name)}</strong>${u.shift?` <span class="chip chip-shift">T${u.shift}</span>`:''}<br>
+                            <span class="text-sm text-gray">${escapeHtml(u.email)}</span>
+                        </div>
+                    </div>
+                `).join('')}
+            ` : ''}
+        `;
+    },
+
+    async assignShift(memberId, shift) {
+        const m = this.members.find(x => x.id === memberId);
+        if (!m) return;
+        m.shift = shift;
+        // Se è collegato a un account, allinea anche il turno dell'account
+        if (m.userId && shift) {
+            try { await db.ref('users/' + m.userId + '/shift').set(shift); } catch(e) {}
+        }
+        await this.save();
+    },
+
+    _turniCoffee() {
+        const coffeeProducts = this.products.filter(p => p.isCoffee);
+        if (coffeeProducts.length === 0) {
+            return `<div class="alert alert-warn">
+                <strong>Nessun prodotto è marcato come caffè.</strong><br>
+                Vai in 📦 Magazzino, modifica un prodotto e attiva l'opzione "☕ È un caffè".
+            </div>`;
+        }
+
+        return `
+            <div class="alert alert-info">
+                <strong>Distribuzione manuale del caffè per turno.</strong><br>
+                Per ogni prodotto puoi ridistribuire le scorte tra i turni che lo usano.
+                Usa "🔀 Dividi equamente" per ripartire il totale equamente sui turni configurati.
+            </div>
+            ${coffeeProducts.map(p => {
+                const total = SHIFTS.reduce((s,k) => s + (p.shiftStock[k]||0), 0);
+                return `
+                    <div style="border:2px solid #fbbf24;border-radius:0.5rem;padding:1rem;margin-bottom:1rem;background:#fffbeb">
+                        <div class="flex-between mb-1">
+                            <div>
+                                <h3 style="margin:0">☕ ${escapeHtml(p.name)}</h3>
+                                <span class="text-sm text-gray">Turni: <strong>${p.usedByShifts.join('/')}</strong> · Totale: <strong>${total} pz</strong></span>
+                            </div>
+                            <button class="btn btn-blue btn-sm" onclick="App.splitEqually('${p.id}')">🔀 Dividi equamente</button>
+                        </div>
+                        <div class="shift-stock-grid" style="grid-template-columns:repeat(4,1fr)">
+                            ${SHIFTS.map(s => {
+                                const used = p.usedByShifts.includes(s);
+                                return `<div class="form-group" style="margin:0;${!used?'opacity:0.4':''}">
+                                    <label style="text-align:center">Turno ${s}${!used?' (non usa)':''}</label>
+                                    <input type="number" min="0" value="${p.shiftStock[s]||0}" id="tcc-${p.id}-${s}" style="text-align:center" ${!used?'':''}>
+                                </div>`;
+                            }).join('')}
+                        </div>
+                        <button class="btn btn-orange btn-full" style="margin-top:0.5rem" onclick="App.saveTurnoCoffee('${p.id}')">💾 Salva distribuzione</button>
+                    </div>
+                `;
+            }).join('')}
+        `;
+    },
+
+    async splitEqually(prodId) {
+        const p = this.products.find(x => x.id === prodId);
+        if (!p || !p.isCoffee) return;
+        const total = SHIFTS.reduce((s,k) => s + (p.shiftStock[k]||0), 0);
+        const split = splitQty(total, p.usedByShifts);
+        // turni non usati a 0
+        const newDist = {A:0,B:0,C:0,D:0};
+        Object.assign(newDist, split);
+
+        if (!confirm(`Dividere ${total} pezzi equamente tra ${p.usedByShifts.join('/')}?\n\n${p.usedByShifts.map(s=>'T'+s+': '+newDist[s]).join(' · ')}`)) return;
+
+        const oldDist = {...p.shiftStock};
+        p.shiftStock = newDist;
+        const summary = SHIFTS.map(s => `T${s}: ${oldDist[s]||0}→${newDist[s]}`).join(', ');
+        this.purchases.unshift({
+            id: uid(),
+            description: `🔀 Divisione equa ${p.name}: ${summary}`,
+            amount: 0, qty: 0,
+            productId: p.id, productName: p.name,
+            isCoffee: true, isAdjustment: true,
+            date: new Date().toISOString(),
+            registeredBy: Auth.user.name, registeredByUid: Auth.user.uid
+        });
+        await this.save();
+    },
+
+    async saveTurnoCoffee(prodId) {
+        const p = this.products.find(x => x.id === prodId);
+        if (!p) return;
+        const newDist = {};
+        for (const s of SHIFTS) {
+            const v = parseInt(document.getElementById(`tcc-${p.id}-${s}`).value);
+            if (isNaN(v) || v < 0) { alert(`Valore non valido per turno ${s}`); return; }
+            newDist[s] = v;
+        }
+        const oldDist = {...p.shiftStock};
+        let changed = false;
+        for (const s of SHIFTS) if (newDist[s] !== (oldDist[s]||0)) changed = true;
+        if (!changed) { alert('Nessuna modifica.'); return; }
+
+        p.shiftStock = newDist;
+        const summary = SHIFTS.map(s => `T${s}: ${oldDist[s]||0}→${newDist[s]}`).join(', ');
+        this.purchases.unshift({
+            id: uid(),
+            description: `🔧 Distribuzione ${p.name}: ${summary}`,
+            amount: 0, qty: 0,
+            productId: p.id, productName: p.name,
+            isCoffee: true, isAdjustment: true,
+            date: new Date().toISOString(),
+            registeredBy: Auth.user.name, registeredByUid: Auth.user.uid
+        });
+        await this.save();
+        alert('✅ Distribuzione salvata!');
+    },
+
+    // ---- ADMIN (super_admin) ----
+    _adminTab: 'ruoli',
+    page_admin() {
+        if (!Auth.isSuperAdmin()) return '<p>Accesso negato</p>';
+        return `
+            <div class="flex mb-2">
+                <button class="btn ${this._adminTab==='ruoli'?'btn-red':'btn-gray'}" style="flex:1" onclick="App._adminTab='ruoli';App.renderContent()">👑 Ruoli</button>
+                <button class="btn ${this._adminTab==='migrazione'?'btn-red':'btn-gray'}" style="flex:1" onclick="App._adminTab='migrazione';App.renderContent()">🔄 Migrazione</button>
+            </div>
+            ${this._adminTab === 'ruoli' ? this._adminRuoli() : this._adminMigrazione()}`;
+    },
+
+    _adminRuoli() {
+        const admins = this.users.filter(u => u.role === 'admin');
+        const regulars = this.users.filter(u => u.role === 'user');
+        const supers = this.users.filter(u => u.role === 'super_admin');
+
+        return `
+            <h2>👑 Gestione Ruoli</h2>
+            <div class="alert alert-info">Solo tu (Gestore) puoi promuovere o rimuovere amministratori. Massimo 4 admin (uno per turno è ideale).</div>
+
+            <h3>👑 Gestore</h3>
+            ${supers.map(u => `<div class="member-item"><div><strong>${escapeHtml(u.name)}</strong>${u.shift?` <span class="chip chip-shift">T${u.shift}</span>`:''}<br><span class="text-sm text-gray">${escapeHtml(u.email)}</span></div><span class="chip chip-green">Gestore</span></div>`).join('')}
+
+            <h3 style="margin-top:1rem">🔧 Amministratori (${admins.length}/4)</h3>
+            ${admins.length===0?'<p class="text-gray text-sm">Nessun amministratore nominato</p>':
+                admins.map(u=>`
+                    <div class="member-item">
+                        <div><strong>${escapeHtml(u.name)}</strong>${u.shift?` <span class="chip chip-shift">T${u.shift}</span>`:''}<br><span class="text-sm text-gray">${escapeHtml(u.email)}</span></div>
+                        <button class="btn btn-orange btn-sm" onclick="App.removeAdmin('${u.uid}')">Rimuovi Admin</button>
+                    </div>`).join('')}
+
+            <h3 style="margin-top:1rem">👤 Utenti normali (${regulars.length})</h3>
+            ${regulars.length===0?'<p class="text-gray text-sm">Nessun utente registrato</p>':
+                regulars.map(u=>`
+                    <div class="member-item">
+                        <div><strong>${escapeHtml(u.name)}</strong>${u.shift?` <span class="chip chip-shift">T${u.shift}</span>`:''}<br><span class="text-sm text-gray">${escapeHtml(u.email)}</span></div>
+                        <button class="btn btn-green btn-sm" ${admins.length>=4?'disabled title="Massimo 4 admin"':''} onclick="App.makeAdmin('${u.uid}')">Nomina Admin</button>
+                    </div>`).join('')}`;
+    },
+
+    _adminMigrazione() {
+        const total = this.members.length;
+        const linked = this.members.filter(m => m.userId);
+        const unlinked = this.members.filter(m => !m.userId);
+        const linkedCount = linked.length;
+        const pct = total > 0 ? Math.round((linkedCount / total) * 100) : 0;
+
+        const availableUsers = this.users.filter(u =>
+            !this.members.some(m => m.userId === u.uid) && u.role !== 'super_admin'
+        );
+
+        return `
+            <h2>🔄 Migrazione Account</h2>
+            <div class="alert alert-info">
+                Collega ogni vigile esistente al suo nuovo account con login. Quando un vigile registra un nuovo account e lo colleghi qui, <strong>porta automaticamente con sé tutto il suo storico</strong>: debito attuale, transazioni, pagamenti.
+            </div>
+
+            <div style="margin-bottom:1.5rem">
+                <div class="flex-between text-sm" style="font-weight:600">
+                    <span>Progresso migrazione</span>
+                    <span>${linkedCount}/${total} vigili collegati</span>
+                </div>
+                <div class="mig-progress">
+                    <div class="mig-progress-bar" style="width:${pct}%"></div>
+                    <div class="mig-progress-text">${pct}%</div>
+                </div>
+            </div>
+
+            <h3>⚡ Collegamento rapido</h3>
+            ${unlinked.length === 0 ? '<div class="alert alert-ok">✅ Tutti i vigili sono collegati!</div>' :
+                availableUsers.length === 0 ? '<div class="alert alert-warn">Nessun account disponibile da collegare. I vigili devono prima registrarsi nell\'app.</div>' : `
+                <p class="text-sm text-gray mb-1">Suggerimenti automatici basati sul nome (cliccaci per collegare):</p>
+                ${unlinked.map(m => {
+                    const matches = this._findMatches(m, availableUsers);
+                    return `<div class="member-item ${(m.balance||0)>0?'has-debt':''}">
+                        <div>
+                            <strong>${escapeHtml(m.name)}</strong>${m.shift?` <span class="chip chip-shift">T${m.shift}</span>`:''}
+                            ${(m.balance||0)>0?`<br><span class="text-sm" style="color:#dc2626">Debito attuale: €${m.balance.toFixed(2)} (verrà ereditato dall'account)</span>`:''}
+                        </div>
+                        <div style="text-align:right">
+                            ${matches.length > 0 ? matches.slice(0,2).map(u => `
+                                <button class="btn btn-blue btn-sm" style="margin:0.1rem" onclick="App.confirmLink('${m.id}','${u.uid}')" title="${escapeAttr(u.email)}">→ ${escapeHtml(u.name.split(' ')[0])}</button>
+                            `).join('') : ''}
+                            <button class="btn btn-gray btn-sm" onclick="App.modalLink('${m.id}')">📋 Tutti</button>
+                        </div>
+                    </div>`;
+                }).join('')}
+            `}
+
+            ${linked.length > 0 ? `
+                <div class="divider"></div>
+                <details>
+                    <summary style="cursor:pointer;font-weight:600;color:#16a34a">✅ Già collegati (${linkedCount})</summary>
+                    <div style="margin-top:0.5rem">
+                        ${linked.map(m => {
+                            const u = this.users.find(u => u.uid === m.userId);
+                            return `<div class="mig-link-row linked">
+                                <div>
+                                    <strong>${escapeHtml(m.name)}</strong>${m.shift?` <span class="chip chip-shift">T${m.shift}</span>`:''}<br>
+                                    <span class="text-sm text-gray">${u ? escapeHtml(u.email) : 'Account collegato'}</span>
+                                </div>
+                                <button class="btn btn-sm btn-gray" onclick="App.unlinkMember('${m.id}')">Scollega</button>
+                            </div>`;
+                        }).join('')}
+                    </div>
+                </details>
+            ` : ''}
+        `;
+    },
+
+    // Auto-suggerimento di matching tra vigili (vecchi) e account (nuovi) basato sul nome
+    _findMatches(member, users) {
+        const memberWords = member.name.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+        return users.map(u => {
+            const userWords = u.name.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+            let score = 0;
+            for (const mw of memberWords) {
+                for (const uw of userWords) {
+                    if (mw === uw) score += 10;
+                    else if (mw.includes(uw) || uw.includes(mw)) score += 5;
+                }
+            }
+            // Bonus se i turni coincidono
+            if (member.shift && u.shift && member.shift === u.shift) score += 3;
+            return { ...u, _score: score };
+        }).filter(x => x._score > 0).sort((a,b) => b._score - a._score);
+    },
+
+    async confirmLink(memberId, userId) {
+        const m = this.members.find(x => x.id === memberId);
+        const u = this.users.find(x => x.uid === userId);
+        if (!m || !u) return;
+
+        const debtMsg = (m.balance||0) > 0 ? `\n💰 Debito ereditato: €${m.balance.toFixed(2)}` : '';
+        const txCount = this.transactions.filter(t => t.memberId === m.id).length;
+        const txMsg = txCount > 0 ? `\n📋 ${txCount} transazioni storiche associate` : '';
+
+        if (!confirm(`Collegare:\n\n🧑‍🚒 Vigile: ${m.name}${m.shift?' (T'+m.shift+')':''}\n📱 Account: ${u.name} (${u.email})${u.shift?' [T'+u.shift+']':''}${debtMsg}${txMsg}\n\nL'account ${u.name} riprenderà tutto lo storico di ${m.name}.\n\nConfermi?`)) return;
+
+        m.userId = userId;
+        // Allinea il turno: priorità al turno dell'account (se ha scelto in registrazione)
+        if (u.shift) {
+            m.shift = u.shift;
+        } else if (m.shift) {
+            // Se il member ha turno ma l'utente no, propaga al profilo utente
+            try { await db.ref('users/' + userId + '/shift').set(m.shift); } catch(e) {}
+        }
+
+        await this.save();
+        alert(`✅ ${u.name} ora ha tutto lo storico di ${m.name}!`);
+    },
+
+    async unlinkMember(memberId) {
+        const m = this.members.find(x => x.id === memberId);
+        if (!m) return;
+        if (!confirm(`Scollegare ${m.name} dal suo account?\n\nLo storico (debito, transazioni) resta associato al vigile e potrai ricollegarlo a un altro account in futuro.`)) return;
+        m.userId = null;
+        await this.save();
+    },
+
+    async makeAdmin(userId) {
+        const admins = this.users.filter(u => u.role === 'admin');
+        if (admins.length >= 4) { alert('Massimo 4 admin (uno per turno).'); return; }
+        if (!confirm('Confermi nomina ad amministratore?')) return;
+        try {
+            await db.ref('users/'+userId+'/role').set('admin');
+            alert('✅ Nominato amministratore!');
+        } catch(e) { alert('Errore: ' + e.message); }
+    },
+
+    async removeAdmin(userId) {
+        if (!confirm('Rimuovere i privilegi di amministratore?')) return;
+        try {
+            await db.ref('users/'+userId+'/role').set('user');
+            alert('✅ Privilegi rimossi');
+        } catch(e) { alert('Errore: ' + e.message); }
+    }
+};
+
+// =============================================
+// BOOT
+// =============================================
+fbAuth.onAuthStateChanged(user => {
+    if (user) {
+        Auth.loadProfile(user);
+    } else {
+        document.getElementById('login-screen').classList.remove('hidden');
+        document.getElementById('app-screen').classList.add('hidden');
+    }
+});
+</script>
 </body>
 </html>
