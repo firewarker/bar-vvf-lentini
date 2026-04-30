@@ -453,8 +453,8 @@ const App = {
         if (Auth.isAdmin()) {
             const usersRef = db.ref('users');
             usersRef.on('value', snap => {
-                this.users = [];
-                snap.forEach(c => this.users.push({ uid: c.key, ...c.val() }));
+                const val = snap.val() || {};
+                this.users = Object.entries(val).map(([uid, data]) => ({ uid, ...data }));
                 if (['admin','vigili','turni'].includes(this.tab)) this.render();
             });
             this.listeners.push(() => usersRef.off());
@@ -1675,8 +1675,8 @@ const App = {
         if (this.users.length === 0) {
             try {
                 const snap = await db.ref('users').once('value');
-                this.users = [];
-                snap.forEach(c => this.users.push({ uid: c.key, ...c.val() }));
+                const val = snap.val() || {};
+                this.users = Object.entries(val).map(([uid, data]) => ({ uid, ...data }));
             } catch(e) { console.error('Errore caricamento utenti:', e); }
         }
 
@@ -1973,8 +1973,8 @@ const App = {
     async _refreshUsersFromDb() {
         try {
             const snap = await db.ref('users').once('value');
-            this.users = [];
-            snap.forEach(c => this.users.push({ uid: c.key, ...c.val() }));
+            const val = snap.val() || {};
+            this.users = Object.entries(val).map(([uid, data]) => ({ uid, ...data }));
             console.log('[refreshUsers] Loaded', this.users.length, 'users from DB');
         } catch(e) { console.error('[refreshUsers] Error:', e); }
     },
