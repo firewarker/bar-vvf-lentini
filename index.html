@@ -650,7 +650,15 @@ const App = {
         ).join('');
     },
 
-    switchTab(t) { this.tab = t; this.renderTabs(); this.renderContent(); },
+    switchTab(t) {
+        this.tab = t;
+        this.renderTabs();
+        this.renderContent();
+        // Per le tab che dipendono da this.users, forza un refresh dal DB
+        if (Auth.isAdmin() && ['admin','vigili','turni'].includes(t)) {
+            this._refreshUsersFromDb().then(() => this.renderContent());
+        }
+    },
 
     renderContent() {
         const fn = 'page_' + this.tab;
@@ -1660,36 +1668,35 @@ const App = {
     },
 
     async modalLink(memberId) {
-        const m = this.members.find(x => x.id === memberId);
+        const m = this.members.find(x=>x.id===memberId);
         if (!m) return;
-        try {
-            const snap = await db.ref('users').once('value');
-            this.users = [];
-            snap.forEach(c => this.users.push({ uid: c.key, ...c.val() }));
-        } catch(e) {
-            alert('❌ Errore lettura utenti: ' + e.message + '\n\nControlla le regole del Realtime Database in Firebase Console.');
-            return;
+
+        // Defensive: se la lista utenti è vuota, ricaricala dal database
+        if (this.users.length === 0) {
+            try {
+                const snap = await db.ref('users').once('value');
+                this.users = [];
+                snap.forEach(c => this.users.push({ uid: c.key, ...c.val() }));
+            } catch(e) { console.error('Errore caricamento utenti:', e); }
         }
-        const available = this.users
-            .filter(u => !this.members.some(mem => mem.userId === u.uid))
-            .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'it'));
+
+        const unlinked = this.users.filter(u => !this.members.some(mem => mem.userId === u.uid));
+
         modal(`🔗 Collega: ${escapeHtml(m.name)}`, `
-            <div class="alert alert-info">
-                Utenti nel DB: <strong>${this.users.length}</strong> &nbsp;|&nbsp; Account liberi: <strong>${available.length}</strong>
-            </div>
-            ${available.length === 0
-                ? '<div class="alert alert-warn">Tutti gli account nel database sono già collegati a un vigile.</div>'
-                : `<div class="form-group">
-                    <label>Seleziona account (${available.length} disponibili)</label>
+            <p class="text-sm text-gray mb-1">Collega un account registrato a questo vigile.</p>
+            ${unlinked.length === 0 ? '<div class="alert alert-warn">Nessun account disponibile. Devono prima registrarsi nell\'app.</div>' : `
+                <div class="form-group"><label>Seleziona utente (${unlinked.length} disponibili)</label>
                     <select id="link-uid">
                         <option value="">-- Seleziona --</option>
-                        ${available.map(u => `<option value="${u.uid}">${escapeHtml(u.name || '(senza nome)')} (${escapeHtml(u.email || '')})${u.shift ? ' [T' + u.shift + ']' : ''}${u.role === 'super_admin' ? ' 👑' : u.role === 'admin' ? ' 🔧' : ''}</option>`).join('')}
+                        ${unlinked.map(u => `<option value="${u.uid}">${escapeHtml(u.name)} (${escapeHtml(u.email)})${u.shift?' [T'+u.shift+']':''}${u.role==='super_admin'?' 👑':u.role==='admin'?' 🔧':''}</option>`).join('')}
                     </select>
                 </div>
-                <button class="btn btn-red btn-full" onclick="App.doLink('${memberId}')">Collega</button>`
-            }
+                <div class="alert alert-info text-sm">Il turno del vigile verrà allineato a quello dell'account selezionato.</div>
+                <button class="btn btn-red btn-full" onclick="App.doLink('${memberId}')">Collega</button>
+            `}
         `);
     },
+
     async doLink(memberId) {
         const userId = document.getElementById('link-uid').value;
         if (!userId) { alert('Seleziona un utente'); return; }
@@ -1925,38 +1932,10 @@ const App = {
         if (!Auth.isSuperAdmin()) return '<p>Accesso negato</p>';
         return `
             <div class="flex mb-2">
-                <button class="btn ${this._adminTab==='ruoli'?'btn-red':'btn-gray'}" style="flex:1" onclick="App.setAdminTab('ruoli')">👑 Ruoli</button>
-                <button class="btn ${this._adminTab==='migrazione'?'btn-red':'btn-gray'}" style="flex:1" onclick="App.setAdminTab('migrazione')">🔄 Migrazione</button>
-            </div>
-            <div class="alert alert-info text-sm" style="margin-bottom:0.75rem;display:flex;align-items:center;justify-content:space-between">
-                <span>Utenti nel DB: <strong>${this.users.length}</strong></span>
-                <button class="btn btn-gray btn-sm" onclick="App.refreshAdminUsers()">🔄 Ricarica lista</button>
+                <button class="btn ${this._adminTab==='ruoli'?'btn-red':'btn-gray'}" style="flex:1" onclick="App._adminTab='ruoli';App.renderContent()">👑 Ruoli</button>
+                <button class="btn ${this._adminTab==='migrazione'?'btn-red':'btn-gray'}" style="flex:1" onclick="App._adminTab='migrazione';App.renderContent()">🔄 Migrazione</button>
             </div>
             ${this._adminTab === 'ruoli' ? this._adminRuoli() : this._adminMigrazione()}`;
-    },
-
-    setAdminTab(tab) {
-        this._adminTab = tab;
-        this.renderContent();
-    },
-
-    refreshAdminUsers() {
-        const el = document.getElementById('content');
-        if (el) el.innerHTML = '<p class="text-center text-gray" style="padding:2rem">⏳ Ricaricamento utenti...</p>';
-        db.ref('users').once('value')
-            .then(snap => {
-                this.users = [];
-                snap.forEach(c => this.users.push({ uid: c.key, ...c.val() }));
-                this.renderContent();
-            })
-            .catch(err => {
-                if (el) el.innerHTML = `
-                    <div class="alert alert-danger">
-                        ❌ <strong>Errore lettura /users</strong><br>
-                        ${escapeHtml(err.message)}<br><br>
-                        Vai su Firebase Console → Realtime Database → Regole e controlla i permessi di lettura.
-                    </div>`;
-            });
     },
 
     _adminRuoli() {
@@ -1965,8 +1944,11 @@ const App = {
         const supers = this.users.filter(u => u.role === 'super_admin');
 
         return `
-            <h2>👑 Gestione Ruoli</h2>
-            <div class="alert alert-info">Solo tu (Gestore) puoi promuovere o rimuovere amministratori. Massimo 8 admin (2 per turno).</div>
+            <div class="flex-between mb-1">
+                <h2 style="margin:0">👑 Gestione Ruoli</h2>
+                <button class="btn btn-blue btn-sm" onclick="App.refreshAndRerender()">🔄 Ricarica</button>
+            </div>
+            <div class="alert alert-info">Solo tu (Gestore) puoi promuovere o rimuovere amministratori. Massimo 8 admin (2 per turno).<br><span class="text-sm">Account totali nel database: <strong>${this.users.length}</strong> (Gestore: ${supers.length}, Admin: ${admins.length}, Utenti: ${regulars.length})</span></div>
 
             <h3>👑 Gestore</h3>
             ${supers.map(u => `<div class="member-item"><div><strong>${escapeHtml(u.name)}</strong>${u.shift?` <span class="chip chip-shift">T${u.shift}</span>`:''}<br><span class="text-sm text-gray">${escapeHtml(u.email)}</span></div><span class="chip chip-green">Gestore</span></div>`).join('')}
@@ -1980,12 +1962,26 @@ const App = {
                     </div>`).join('')}
 
             <h3 style="margin-top:1rem">👤 Utenti normali (${regulars.length})</h3>
-            ${regulars.length===0?'<p class="text-gray text-sm">Nessun utente registrato</p>':
+            ${regulars.length===0?'<p class="text-gray text-sm">Nessun utente registrato. Usa il bottone "🔄 Ricarica" sopra per aggiornare la lista dal database.</p>':
                 regulars.map(u=>`
                     <div class="member-item">
                         <div><strong>${escapeHtml(u.name)}</strong>${u.shift?` <span class="chip chip-shift">T${u.shift}</span>`:''}<br><span class="text-sm text-gray">${escapeHtml(u.email)}</span></div>
                         <button class="btn btn-green btn-sm" ${admins.length>=8?'disabled title="Massimo 8 admin"':''} onclick="App.makeAdmin('${u.uid}')">Nomina Admin</button>
                     </div>`).join('')}`;
+    },
+
+    async _refreshUsersFromDb() {
+        try {
+            const snap = await db.ref('users').once('value');
+            this.users = [];
+            snap.forEach(c => this.users.push({ uid: c.key, ...c.val() }));
+            console.log('[refreshUsers] Loaded', this.users.length, 'users from DB');
+        } catch(e) { console.error('[refreshUsers] Error:', e); }
+    },
+
+    async refreshAndRerender() {
+        await this._refreshUsersFromDb();
+        this.render();
     },
 
     _adminMigrazione() {
@@ -1995,14 +1991,21 @@ const App = {
         const linkedCount = linked.length;
         const pct = total > 0 ? Math.round((linkedCount / total) * 100) : 0;
 
-        const availableUsers = this.users.filter(u =>
-            !this.members.some(m => m.userId === u.uid)
-        );
+        // Ogni utente che non è già stato linkato è "disponibile"
+        const linkedUids = new Set(this.members.map(m => m.userId).filter(Boolean));
+        const availableUsers = this.users.filter(u => !linkedUids.has(u.uid));
 
         return `
-            <h2>🔄 Migrazione Account</h2>
+            <div class="flex-between mb-1">
+                <h2 style="margin:0">🔄 Migrazione Account</h2>
+                <button class="btn btn-blue btn-sm" onclick="App.refreshAndRerender()">🔄 Ricarica utenti dal database</button>
+            </div>
             <div class="alert alert-info">
                 Collega ogni vigile esistente al suo nuovo account con login. Quando un vigile registra un nuovo account e lo colleghi qui, <strong>porta automaticamente con sé tutto il suo storico</strong>: debito attuale, transazioni, pagamenti.
+            </div>
+
+            <div class="alert ${availableUsers.length > 0 ? 'alert-ok' : 'alert-warn'}" style="display:flex;justify-content:space-between;align-items:center">
+                <span>Account registrati totali: <strong>${this.users.length}</strong> · Già collegati: <strong>${linkedCount}</strong> · Disponibili: <strong>${availableUsers.length}</strong></span>
             </div>
 
             <div style="margin-bottom:1.5rem">
@@ -2016,9 +2019,23 @@ const App = {
                 </div>
             </div>
 
-            <h3>⚡ Collegamento rapido</h3>
+            ${availableUsers.length > 0 ? `
+                <h3>📱 Account disponibili da collegare (${availableUsers.length})</h3>
+                <p class="text-sm text-gray mb-1">Questi utenti si sono registrati nell'app ma non sono ancora collegati a un vigile. Clicca su un suggerimento per ogni vigile o usa "📋 Tutti" per scegliere manualmente.</p>
+                ${availableUsers.map(u => `
+                    <div class="member-item">
+                        <div>
+                            <strong>${escapeHtml(u.name)}</strong>${u.shift?` <span class="chip chip-shift">T${u.shift}</span>`:''}${u.role==='super_admin'?' 👑':u.role==='admin'?' 🔧':''}<br>
+                            <span class="text-sm text-gray">${escapeHtml(u.email)}</span>
+                        </div>
+                    </div>
+                `).join('')}
+                <div class="divider"></div>
+            ` : ''}
+
+            <h3>⚡ Vigili da collegare (${unlinked.length})</h3>
             ${unlinked.length === 0 ? '<div class="alert alert-ok">✅ Tutti i vigili sono collegati!</div>' :
-                availableUsers.length === 0 ? '<div class="alert alert-warn">Nessun account disponibile da collegare. I vigili devono prima registrarsi nell\'app.</div>' : `
+                availableUsers.length === 0 ? '<div class="alert alert-warn">Nessun account disponibile da collegare. I vigili devono prima registrarsi nell\'app, poi clicca "🔄 Ricarica utenti".</div>' : `
                 <p class="text-sm text-gray mb-1">Suggerimenti automatici basati sul nome (cliccaci per collegare):</p>
                 ${unlinked.map(m => {
                     const matches = this._findMatches(m, availableUsers);
