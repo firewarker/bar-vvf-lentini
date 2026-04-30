@@ -1805,30 +1805,76 @@ const App = {
         const m = this.members.find(x=>x.id===memberId);
         if (!m) return;
 
-        // Defensive: se la lista utenti è vuota, ricaricala dal database
-        if (this.users.length === 0) {
-            try {
-                const snap = await db.ref('users').once('value');
-                this.users = [];
-                snap.forEach(c => this.users.push({ uid: c.key, ...c.val() }));
-            } catch(e) { console.error('Errore caricamento utenti:', e); }
+        // Fetch SEMPRE fresco dal DB per sicurezza
+        let allUsers = [];
+        try {
+            const snap = await db.ref('users').once('value');
+            snap.forEach(c => allUsers.push({ uid: c.key, ...c.val() }));
+            this.users = allUsers;
+        } catch(e) {
+            console.error('Errore fetch utenti:', e);
+            allUsers = [...this.users];
         }
 
-        const unlinked = this.users.filter(u => !this.members.some(mem => mem.userId === u.uid));
+        // Utenti liberi (non collegati ad alcun membro)
+        const unlinked = allUsers.filter(u => !this.members.some(mem => mem.userId === u.uid));
+        // Utenti già collegati ad altri membri
+        const alreadyLinked = allUsers.filter(u =>
+            this.members.some(mem => mem.userId === u.uid && mem.id !== memberId)
+        );
 
-        modal(`🔗 Collega: ${escapeHtml(m.name)}`, `
-            <p class="text-sm text-gray mb-1">Collega un account registrato a questo vigile.</p>
-            ${unlinked.length === 0 ? '<div class="alert alert-warn">Nessun account disponibile. Devono prima registrarsi nell\'app.</div>' : `
-                <div class="form-group"><label>Seleziona utente (${unlinked.length} disponibili)</label>
-                    <select id="link-uid">
-                        <option value="">-- Seleziona --</option>
-                        ${unlinked.map(u => `<option value="${u.uid}">${escapeHtml(u.name)} (${escapeHtml(u.email)})${u.shift?' [T'+u.shift+']':''}${u.role==='super_admin'?' 👑':u.role==='admin'?' 🔧':''}</option>`).join('')}
-                    </select>
-                </div>
-                <div class="alert alert-info text-sm">Il turno del vigile verrà allineato a quello dell'account selezionato.</div>
-                <button class="btn btn-red btn-full" onclick="App.doLink('${memberId}')">Collega</button>
-            `}
-        `);
+        let bodyHtml = `<p class="text-sm text-gray mb-1">Collega un account registrato a questo vigile.</p>`;
+
+        if (unlinked.length === 0) {
+            bodyHtml += `<div class="alert alert-warn">
+                <strong>Nessun account libero</strong> (${allUsers.length} totali nel DB).<br>
+                ${allUsers.length === 0
+                    ? '<span style="color:#991b1b">⚠️ Nessun utente si è ancora registrato nell\'app.</span>'
+                    : alreadyLinked.length > 0
+                        ? `Tutti gli account sono già collegati ad altri vigili:<br>
+                           <span class="text-sm">${alreadyLinked.map(u => {
+                               const lm = this.members.find(mem => mem.userId === u.uid);
+                               return escapeHtml(u.name) + ' → ' + (lm ? escapeHtml(lm.name) : '?');
+                           }).join(', ')}</span>`
+                        : 'Nessun account trovato per il collegamento.'
+                }
+            </div>`;
+
+            // Opzione forzatura se ci sono utenti già linkati altrove
+            if (alreadyLinked.length > 0) {
+                bodyHtml += `
+                <details style="margin-top:0.5rem">
+                    <summary class="text-sm" style="cursor:pointer;color:#dc2626;font-weight:600">
+                        ↩️ Forza collegamento (riassegna da altro vigile)
+                    </summary>
+                    <div class="form-group" style="margin-top:0.5rem">
+                        <select id="link-uid">
+                            <option value="">-- Seleziona --</option>
+                            ${alreadyLinked.map(u => {
+                                const lm = this.members.find(mem => mem.userId === u.uid);
+                                return `<option value="${u.uid}">${escapeHtml(u.name)} (ora collegato a: ${lm ? escapeHtml(lm.name) : '?'})</option>`;
+                            }).join('')}
+                        </select>
+                    </div>
+                    <button class="btn btn-orange btn-full" onclick="App.doLink('${memberId}')">Forza Collegamento</button>
+                </details>`;
+            }
+        } else {
+            bodyHtml += `
+            <div class="form-group">
+                <label>Seleziona account (${unlinked.length} disponibili)</label>
+                <select id="link-uid">
+                    <option value="">-- Seleziona --</option>
+                    ${unlinked.map(u =>
+                        `<option value="${u.uid}">${escapeHtml(u.name)} (${escapeHtml(u.email)})${u.shift ? ' [T' + u.shift + ']' : ''}${u.role === 'super_admin' ? ' 👑' : u.role === 'admin' ? ' 🔧' : ''}</option>`
+                    ).join('')}
+                </select>
+            </div>
+            <div class="alert alert-info text-sm">Il turno del vigile verrà allineato a quello dell'account selezionato.</div>
+            <button class="btn btn-red btn-full" onclick="App.doLink('${memberId}')">Collega</button>`;
+        }
+
+        modal(`🔗 Collega: ${escapeHtml(m.name)}`, bodyHtml);
     },
 
     async doLink(memberId) {
