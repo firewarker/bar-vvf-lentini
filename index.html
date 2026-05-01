@@ -53,10 +53,18 @@
         .sync-dot { width: 7px; height: 7px; border-radius: 50%; background: #10b981; flex-shrink: 0; }
         .sync-dot.off { background: #ef4444; }
 
-        .tabs { background: white; display: flex; border-bottom: 2px solid #e5e7eb; overflow-x: auto; }
-        .tab { flex: 1; padding: 0.75rem 0.25rem; text-align: center; font-weight: 600; cursor: pointer; border: none; background: #f9fafb; color: #6b7280; font-size: 0.75rem; white-space: nowrap; transition: 0.15s; min-width: 0; }
+        .tabs { background: white; display: flex; border-bottom: 2px solid #e5e7eb; overflow-x: auto; scrollbar-width: thin; }
+        .tabs::-webkit-scrollbar { height: 3px; }
+        .tab { flex: 1; padding: 0.7rem 0.4rem; text-align: center; font-weight: 600; cursor: pointer; border: none; background: #f9fafb; color: #6b7280; font-size: 0.78rem; white-space: nowrap; transition: 0.15s; min-width: 52px; display: flex; flex-direction: column; align-items: center; gap: 0.15rem; }
         .tab.active { background: #dc2626; color: white; }
         .tab:hover:not(.active) { background: #f3f4f6; }
+        .tab-emoji { font-size: 1.15rem; line-height: 1; }
+        .tab-label { font-size: 0.7rem; line-height: 1; }
+        @media (max-width: 480px) {
+            .tab { padding: 0.6rem 0.35rem; min-width: 48px; }
+            .tab-label { display: none; }
+            .tab-emoji { font-size: 1.3rem; }
+        }
 
         .content { background: white; padding: 1.25rem; border-radius: 0 0 0.75rem 0.75rem; box-shadow: 0 4px 12px rgba(0,0,0,0.08); min-height: 350px; }
 
@@ -138,6 +146,15 @@
         .mb-2 { margin-bottom: 1rem; }
         .hidden { display: none !important; }
 
+        /* Collapsible sections (details/summary) */
+        .collapsible-section { margin-bottom: 0.75rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; overflow: hidden; }
+        .collapsible-section > summary { padding: 0.75rem 1rem; background: #f9fafb; cursor: pointer; font-weight: 600; font-size: 0.95rem; user-select: none; list-style: none; display: flex; align-items: center; justify-content: space-between; }
+        .collapsible-section > summary::-webkit-details-marker { display: none; }
+        .collapsible-section > summary::after { content: '▼'; font-size: 0.7rem; color: #6b7280; transition: transform 0.2s; }
+        .collapsible-section[open] > summary::after { transform: rotate(180deg); }
+        .collapsible-section[open] > summary { background: #fee2e2; color: #991b1b; border-bottom: 1px solid #e5e7eb; }
+        .collapsible-section .collapsible-body { padding: 0.75rem; max-height: 600px; overflow-y: auto; }
+
         .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 999; padding: 1rem; }
         .modal { background: white; border-radius: 0.75rem; padding: 1.5rem; max-width: 480px; width: 100%; max-height: 85vh; overflow-y: auto; box-shadow: 0 12px 40px rgba(0,0,0,0.2); }
         .modal h2 { font-size: 1.15rem; }
@@ -176,10 +193,21 @@
         .mig-link-row.linked { background: #ecfdf5; }
 
         @media (max-width: 600px) {
+            .app-container { padding: 0.4rem; }
             .stats-row { grid-template-columns: repeat(2, 1fr); }
             .product-grid { grid-template-columns: repeat(2, 1fr); }
+            .header { padding: 1rem; }
             .header h1 { font-size: 1.15rem; }
             .header-stats { grid-template-columns: repeat(2, 1fr); }
+            .content { padding: 0.85rem; }
+            h2 { font-size: 1.15rem; }
+            h3 { font-size: 0.95rem; }
+            .stat-card .value { font-size: 1.3rem; }
+            .header-stat .hs-value { font-size: 1rem; }
+            .collapsible-section > summary { padding: 0.65rem 0.75rem; font-size: 0.88rem; }
+            .collapsible-section .collapsible-body { padding: 0.5rem; max-height: 500px; }
+            .tx-item { padding: 0.6rem; gap: 0.35rem; font-size: 0.88rem; }
+            .member-item { padding: 0.6rem; }
         }
     </style>
 </head>
@@ -637,16 +665,16 @@ const App = {
     renderTabs() {
         let tabs;
         if (Auth.isSuperAdmin()) {
-            tabs = [['dashboard','📊'],['vendita','🛒'],['carico','📥 Carico'],['magazzino','📦'],
-                    ['conti','💰 Conti'],['cassa','💵 Cassa'],['vigili','👥'],['turni','🕐 Turni'],['admin','👑']];
+            tabs = [['dashboard','📊','Dashboard'],['vendita','🛒','Vendita'],['carico','📥','Carico'],['magazzino','📦','Magazzino'],
+                    ['conti','💰','Conti'],['cassa','💵','Cassa'],['vigili','👥','Vigili'],['turni','🕐','Turni'],['admin','👑','Admin']];
         } else if (Auth.isAdmin()) {
-            tabs = [['dashboard','📊'],['vendita','🛒'],['carico','📥 Carico'],['magazzino','📦'],
-                    ['conti','💰 Conti'],['cassa','💵 Cassa'],['vigili','👥'],['turni','🕐 Turni']];
+            tabs = [['dashboard','📊','Dashboard'],['vendita','🛒','Vendita'],['carico','📥','Carico'],['magazzino','📦','Magazzino'],
+                    ['conti','💰','Conti'],['cassa','💵','Cassa'],['vigili','👥','Vigili'],['turni','🕐','Turni']];
         } else {
-            tabs = [['home','🏠'],['acquista','🛒 Acquista'],['carico','📥 Carico'],['storico','📋 Storico']];
+            tabs = [['home','🏠','Home'],['acquista','🛒','Acquista'],['carico','📥','Carico'],['storico','📋','Storico']];
         }
-        document.getElementById('tabs').innerHTML = tabs.map(([id, label]) =>
-            `<button class="tab ${this.tab===id?'active':''}" onclick="App.switchTab('${id}')">${label}</button>`
+        document.getElementById('tabs').innerHTML = tabs.map(([id, emoji, label]) =>
+            `<button class="tab ${this.tab===id?'active':''}" onclick="App.switchTab('${id}')" title="${label}" aria-label="${label}"><span class="tab-emoji">${emoji}</span><span class="tab-label">${label}</span></button>`
         ).join('');
     },
 
@@ -951,17 +979,28 @@ const App = {
                 </div>`}
 
             <div class="divider"></div>
-            <h3>📋 Ultimi carichi</h3>
-            ${this.purchases.filter(p => p.productId && !p.isAdjustment).slice(0,10).map(p => `
-                <div class="tx-item carico">
-                    <div>
-                        <strong>${escapeHtml(p.productName||p.description)}</strong>
-                        ${p.qty?` <span class="chip chip-blue">+${p.qty} pz</span>`:''}
-                        ${p.distribution?` <span class="text-sm text-gray">(${p.distribution})</span>`:''}
-                        <br><span class="text-sm text-gray">${fmt(p.date)} · ${escapeHtml(p.registeredBy||'')}</span>
-                    </div>
-                    <div style="text-align:right"><strong style="color:#dc2626">-€${p.amount.toFixed(2)}</strong></div>
-                </div>`).join('') || '<p class="text-center text-gray text-sm">Nessun carico ancora registrato.</p>'}
+            ${(() => {
+                const recentCarichi = [...this.purchases].filter(p => p.productId && !p.isAdjustment).sort((a,b) => new Date(b.date)-new Date(a.date));
+                if (recentCarichi.length === 0) return '<h3>📋 Ultimi carichi</h3><p class="text-center text-gray text-sm">Nessun carico ancora registrato.</p>';
+                return `
+                    <details class="collapsible-section">
+                        <summary>📋 Ultimi carichi (${recentCarichi.length})</summary>
+                        <div class="collapsible-body">
+                            ${recentCarichi.slice(0,30).map(p => `
+                                <div class="tx-item carico">
+                                    <div>
+                                        <strong>${escapeHtml(p.productName||p.description)}</strong>
+                                        ${p.qty?` <span class="chip chip-blue">+${p.qty} pz</span>`:''}
+                                        ${p.distribution?` <span class="text-sm text-gray">(${p.distribution})</span>`:''}
+                                        <br><span class="text-sm text-gray">${fmt(p.date)} · ${escapeHtml(p.registeredBy||'')}</span>
+                                    </div>
+                                    <div style="text-align:right"><strong style="color:#dc2626">-€${p.amount.toFixed(2)}</strong></div>
+                                </div>`).join('')}
+                            ${recentCarichi.length > 30 ? `<p class="text-center text-gray text-sm">Mostrati i 30 più recenti su ${recentCarichi.length}</p>` : ''}
+                        </div>
+                    </details>
+                `;
+            })()}
         `;
     },
 
@@ -1116,12 +1155,12 @@ const App = {
             ${coffeeProducts.length > 0 ? `
                 <h3>☕ Caffè per turno</h3>
                 ${coffeeProducts.map(p => `
-                    <div style="border:2px solid #fbbf24;border-radius:0.5rem;padding:0.85rem;margin-bottom:0.6rem;background:#fffbeb">
-                        <div class="flex-between">
-                            <strong>${escapeHtml(p.name)}</strong>
-                            <span class="text-sm text-gray">Turni: ${p.usedByShifts.join('/')}</span>
+                    <div style="border:2px solid #fbbf24;border-radius:0.5rem;padding:0.6rem;margin-bottom:0.5rem;background:#fffbeb">
+                        <div class="flex-between" style="margin-bottom:0.35rem">
+                            <strong style="font-size:0.95rem">${escapeHtml(p.name)}</strong>
+                            <span class="text-sm text-gray">${p.usedByShifts.join('/')}</span>
                         </div>
-                        <div class="shift-stock-grid">
+                        <div class="shift-stock-grid" style="margin:0">
                             ${SHIFTS.map(s => {
                                 const used = p.usedByShifts.includes(s);
                                 const v = p.shiftStock[s]||0;
@@ -1141,7 +1180,7 @@ const App = {
             ${outStock.length > 0 ? `<div class="alert alert-danger">❌ Esauriti: ${outStock.map(p=>escapeHtml(p.name)).join(', ')}</div>` : ''}
 
             <h3>Ultime vendite</h3>
-            ${this.transactions.slice(-10).reverse().map(t => `
+            ${[...this.transactions].sort((a,b) => new Date(b.date)-new Date(a.date)).slice(0,10).map(t => `
                 <div class="tx-item ${t.paid?'paid':'unpaid'}">
                     <div><strong>${escapeHtml(t.memberName)}</strong> → ${escapeHtml(t.productName)}${t.shift?` <span class="chip chip-shift">${t.shift}</span>`:''}<br><span class="text-sm text-gray">${fmt(t.date)}</span></div>
                     <div style="text-align:right"><strong>€${t.price.toFixed(2)}</strong><br>
@@ -1492,6 +1531,7 @@ const App = {
     // ---- CASSA (admin) ----
     page_cassa() {
         const allTx = [...this.transactions].sort((a,b) => new Date(b.date)-new Date(a.date));
+        const allPurchases = [...this.purchases].sort((a,b) => new Date(b.date)-new Date(a.date));
         const totalDebt = this.members.reduce((s,m) => s + (m.balance||0), 0);
 
         return `
@@ -1506,27 +1546,36 @@ const App = {
                 <button class="btn btn-red" style="flex:1" onclick="App.modalPurchase()">📝 Spesa Generica</button>
             </div>
 
-            <h3>🛒 Carichi e spese</h3>
-            ${this.purchases.length===0?'<p class="text-center text-gray mb-2">Nessuna registrazione</p>':
-                this.purchases.slice(0,20).map(p=>`
-                    <div class="tx-item ${p.productId?'carico':'expense'}">
-                        <div>
-                            <strong>${escapeHtml(p.description)}</strong>
-                            ${p.qty?` <span class="chip chip-blue">+${p.qty} pz</span>`:''}
-                            <br><span class="text-sm text-gray">${fmt(p.date)} · ${escapeHtml(p.registeredBy||'')}</span>
-                        </div>
-                        <div style="text-align:right"><strong style="color:#dc2626">${p.amount>0?'-€'+p.amount.toFixed(2):'—'}</strong></div>
-                    </div>`).join('')}
+            <details class="collapsible-section">
+                <summary>🛒 Carichi e spese (${allPurchases.length})</summary>
+                <div class="collapsible-body">
+                    ${allPurchases.length===0?'<p class="text-center text-gray">Nessuna registrazione</p>':
+                        allPurchases.slice(0,30).map(p=>`
+                            <div class="tx-item ${p.productId?'carico':'expense'}">
+                                <div>
+                                    <strong>${escapeHtml(p.description)}</strong>
+                                    ${p.qty?` <span class="chip chip-blue">+${p.qty} pz</span>`:''}
+                                    <br><span class="text-sm text-gray">${fmt(p.date)} · ${escapeHtml(p.registeredBy||'')}</span>
+                                </div>
+                                <div style="text-align:right"><strong style="color:#dc2626">${p.amount>0?'-€'+p.amount.toFixed(2):'—'}</strong></div>
+                            </div>`).join('')}
+                    ${allPurchases.length > 30 ? `<p class="text-center text-gray text-sm">Mostrate le 30 più recenti su ${allPurchases.length}</p>` : ''}
+                </div>
+            </details>
 
-            <div class="divider"></div>
-            <h3>📊 Storico vendite</h3>
-            ${allTx.length===0?'<p class="text-center text-gray">Nessuna vendita</p>':
-                allTx.slice(0,30).map(t=>`
-                    <div class="tx-item ${t.paid?'paid':'unpaid'}">
-                        <div><strong>${escapeHtml(t.memberName)}</strong> → ${escapeHtml(t.productName)}${t.shift?` <span class="chip chip-shift">${t.shift}</span>`:''}<br><span class="text-sm text-gray">${fmt(t.date)}</span></div>
-                        <div style="text-align:right"><strong>€${t.price.toFixed(2)}</strong><br>
-                        <span class="chip ${t.paid?'chip-green':'chip-orange'}">${t.paid?'Pagato':'Credito'}</span></div>
-                    </div>`).join('')}`;
+            <details class="collapsible-section">
+                <summary>📊 Storico vendite (${allTx.length})</summary>
+                <div class="collapsible-body">
+                    ${allTx.length===0?'<p class="text-center text-gray">Nessuna vendita</p>':
+                        allTx.slice(0,50).map(t=>`
+                            <div class="tx-item ${t.paid?'paid':'unpaid'}">
+                                <div><strong>${escapeHtml(t.memberName)}</strong> → ${escapeHtml(t.productName)}${t.shift?` <span class="chip chip-shift">${t.shift}</span>`:''}<br><span class="text-sm text-gray">${fmt(t.date)}</span></div>
+                                <div style="text-align:right"><strong>€${t.price.toFixed(2)}</strong><br>
+                                <span class="chip ${t.paid?'chip-green':'chip-orange'}">${t.paid?'Pagato':'Credito'}</span></div>
+                            </div>`).join('')}
+                    ${allTx.length > 50 ? `<p class="text-center text-gray text-sm">Mostrate le 50 più recenti su ${allTx.length}</p>` : ''}
+                </div>
+            </details>`;
     },
 
     modalCashEdit() {
