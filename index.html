@@ -720,6 +720,11 @@ const App = {
                         <div class="value" style="color:#16a34a;font-size:1.2rem">€${this.cashRegister.toFixed(2)}</div>
                     </div>
                 </div>
+                ${bal > 0 ? `
+                    <button class="btn btn-green btn-full mb-2" onclick="App.modalUserPay()" style="font-size:0.95rem;padding:0.85rem">
+                        💵 Salda il mio debito (€${bal.toFixed(2)})
+                    </button>
+                ` : bal === 0 && me ? '<div class="alert alert-ok">✅ Nessun debito in sospeso</div>' : ''}
             `}
             <h3>Ultime transazioni</h3>
             ${myTx.length === 0 ? '<p class="text-center text-gray" style="padding:2rem">Nessuna transazione</p>' :
@@ -820,6 +825,65 @@ const App = {
 
         await this.save();
         alert(`✅ ${prod.name} acquistato${payNow ? ' (pagato)' : ' (a credito)'}!`);
+    },
+
+    // =====================================================
+    // PAGAMENTO DEBITO — utente normale auto-saldo
+    // =====================================================
+    modalUserPay() {
+        const me = this.myMember();
+        if (!me || (me.balance||0) <= 0) return;
+        modal('💵 Salda il tuo debito', `
+            <div class="alert alert-info">
+                <strong>Debito attuale:</strong> <span style="color:#dc2626;font-weight:700">€${me.balance.toFixed(2)}</span>
+            </div>
+            <div class="alert alert-warn text-sm">
+                ⚠️ <strong>Importante</strong>: cliccando confermi di aver <strong>fisicamente messo i soldi nella cassa</strong> del bar. Questa operazione aggiorna i tuoi conti ma NON preleva soldi dal tuo conto bancario o da altri sistemi di pagamento.
+            </div>
+            <div class="form-group">
+                <label>Quanto stai pagando? (€)</label>
+                <input type="number" id="upay-amt" step="0.50" min="0.50" max="${me.balance.toFixed(2)}" value="${me.balance.toFixed(2)}">
+            </div>
+            <div class="flex">
+                <button class="btn btn-green" style="flex:1" onclick="App.doUserPay(false)">💰 Pago questo importo</button>
+                <button class="btn btn-red" style="flex:1" onclick="App.doUserPay(true)">✅ Saldo tutto</button>
+            </div>
+        `);
+    },
+
+    async doUserPay(payAll) {
+        const me = this.myMember();
+        if (!me || (me.balance||0) <= 0) { alert('Nessun debito da saldare.'); return; }
+
+        let amount = payAll ? me.balance : (parseFloat(document.getElementById('upay-amt').value)||0);
+        if (amount <= 0) { alert('Importo non valido'); return; }
+        if (amount > me.balance) amount = me.balance;
+
+        if (!confirm(`Confermi di aver messo €${amount.toFixed(2)} nella cassa del bar?\n\nQuesto aggiornerà:\n• Il tuo debito: €${me.balance.toFixed(2)} → €${(me.balance-amount).toFixed(2)}\n• La cassa comune: +€${amount.toFixed(2)}`)) return;
+
+        me.balance = me.balance - amount;
+        if (me.balance < 0.01) me.balance = 0;
+        // Se saldo a zero, marca tutte le transazioni come pagate
+        if (me.balance === 0) {
+            this.transactions.forEach(t => { if (t.memberId === me.id && !t.paid) t.paid = true; });
+        }
+        this.cashRegister += amount;
+
+        // Registra il pagamento come "spesa con importo negativo" per tracciabilità
+        this.purchases.unshift({
+            id: uid(),
+            description: `💵 Pagamento debito di ${me.name} (€${amount.toFixed(2)})`,
+            amount: 0, qty: 0,
+            productId: null, productName: null,
+            isCoffee: false, isAdjustment: true,
+            date: new Date().toISOString(),
+            registeredBy: Auth.user.name,
+            registeredByUid: Auth.user.uid
+        });
+
+        await this.save();
+        modalClose();
+        alert(`✅ Pagamento di €${amount.toFixed(2)} registrato!\n\nGrazie per aver saldato${me.balance>0?' parzialmente':''} il debito.${me.balance>0?'\n\nDebito residuo: €'+me.balance.toFixed(2):''}`);
     },
 
     // =====================================================
