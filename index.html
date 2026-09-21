@@ -231,7 +231,20 @@
                 <input type="password" id="login-pass" placeholder="••••••" autocomplete="current-password">
             </div>
             <button class="login-btn primary" onclick="Auth.login()">Accedi</button>
+            <div class="login-toggle"><a onclick="Auth.toggleView('forgot')">Password dimenticata?</a></div>
             <div class="login-toggle">Non hai un account? <a onclick="Auth.toggleView('register')">Registrati</a></div>
+        </div>
+
+        <div id="forgot-view" class="hidden">
+            <div id="forgot-error" class="login-error hidden"></div>
+            <div id="forgot-success" class="hidden" style="background:#d1fae5;color:#065f46;padding:0.75rem;border-radius:0.375rem;margin-bottom:1rem;font-size:0.85rem;text-align:center"></div>
+            <p style="text-align:center;color:#6b7280;font-size:0.85rem;margin-bottom:1rem">Inserisci la tua email. Riceverai un link per reimpostare la password.<br><strong>Controlla anche la cartella Spam!</strong></p>
+            <div class="form-group">
+                <label>Email</label>
+                <input type="email" id="forgot-email" placeholder="nome@email.it" autocomplete="email">
+            </div>
+            <button class="login-btn primary" onclick="Auth.sendReset()">📧 Invia link di reset</button>
+            <div class="login-toggle"><a onclick="Auth.toggleView('login')">← Torna al login</a></div>
         </div>
 
         <div id="register-view" class="hidden">
@@ -342,8 +355,41 @@ const Auth = {
     toggleView(view) {
         document.getElementById('login-view').classList.toggle('hidden', view !== 'login');
         document.getElementById('register-view').classList.toggle('hidden', view !== 'register');
+        document.getElementById('forgot-view').classList.toggle('hidden', view !== 'forgot');
         document.getElementById('login-error').classList.add('hidden');
         document.getElementById('reg-error').classList.add('hidden');
+        const fe = document.getElementById('forgot-error');
+        const fs = document.getElementById('forgot-success');
+        if (fe) fe.classList.add('hidden');
+        if (fs) fs.classList.add('hidden');
+        // Pre-compila email nel campo reset dal campo login se presente
+        if (view === 'forgot') {
+            const loginEmail = document.getElementById('login-email')?.value.trim();
+            if (loginEmail) document.getElementById('forgot-email').value = loginEmail;
+        }
+    },
+
+    async sendReset() {
+        const email = document.getElementById('forgot-email').value.trim();
+        const err = document.getElementById('forgot-error');
+        const ok = document.getElementById('forgot-success');
+        err.classList.add('hidden');
+        ok.classList.add('hidden');
+        if (!email) { this.showError('forgot-error', 'Inserisci la tua email'); return; }
+        if (!email.match(/^[^@]+@[^@]+\.[^@]+$/)) { this.showError('forgot-error', 'Email non valida'); return; }
+        try {
+            await fbAuth.sendPasswordResetEmail(email);
+            ok.innerHTML = `✅ Email inviata a <strong>${escapeHtml(email)}</strong>!<br><br>Controlla la posta (e la cartella <strong>Spam</strong>).<br>Il link scade dopo 1 ora.`;
+            ok.classList.remove('hidden');
+            document.getElementById('forgot-email').value = '';
+        } catch(e) {
+            let msg = 'Errore invio email';
+            if (e.code === 'auth/user-not-found') msg = 'Nessun account con questa email';
+            else if (e.code === 'auth/invalid-email') msg = 'Email non valida';
+            else if (e.code === 'auth/too-many-requests') msg = 'Troppi tentativi, riprova più tardi';
+            else msg = 'Errore: ' + e.message;
+            this.showError('forgot-error', msg);
+        }
     },
 
     pickShift(s) {
@@ -730,7 +776,7 @@ const App = {
             ${myTx.length === 0 ? '<p class="text-center text-gray" style="padding:2rem">Nessuna transazione</p>' :
                 myTx.map(t => `
                     <div class="tx-item ${t.paid?'paid':'unpaid'}">
-                        <div><strong>${escapeHtml(t.productName)}</strong>${t.shift?` <span class="chip chip-shift">${t.shift}</span>`:''}<br><span class="text-sm text-gray">${fmt(t.date)}</span></div>
+                        <div><strong>${escapeHtml(t.productName)}</strong>${t.quantity && t.quantity > 1 ? ` <span class="chip chip-blue">×${t.quantity}</span>` : ''}${t.shift?` <span class="chip chip-shift">${t.shift}</span>`:''}<br><span class="text-sm text-gray">${fmt(t.date)}</span></div>
                         <div style="text-align:right"><strong style="color:#dc2626">€${t.price.toFixed(2)}</strong><br>
                         <span class="chip ${t.paid?'chip-green':'chip-orange'}">${t.paid?'✓ Pagato':'⏳ Credito'}</span></div>
                     </div>`).join('')}`;
@@ -782,13 +828,13 @@ const App = {
             <div class="stock ${stockClass}">${stockText}</div>
             ${canBuy ? `
                 <div class="flex">
-                    <button class="btn btn-orange btn-sm" style="flex:1" onclick="App.userBuy('${p.id}',false)">📝 Credito</button>
-                    <button class="btn btn-green btn-sm" style="flex:1" onclick="App.userBuy('${p.id}',true)">💵 Paga</button>
+                    <button class="btn btn-orange btn-sm" style="flex:1" onclick="App.modalBuy('${p.id}',false)">📝 Credito</button>
+                    <button class="btn btn-green btn-sm" style="flex:1" onclick="App.modalBuy('${p.id}',true)">💵 Paga</button>
                 </div>` : (p.isCoffee && !sh ? '<div class="text-sm text-gray">⚠️ turno mancante</div>' : '')}
         </div>`;
     },
 
-    async userBuy(prodId, payNow) {
+    modalBuy(prodId, payNow) {
         const me = this.myMember();
         if (!me) { alert('Account non collegato. Contatta un amministratore.'); return; }
         const prod = this.products.find(p => p.id === prodId);
@@ -798,33 +844,120 @@ const App = {
         if (prod.isCoffee && !sh) { alert('Devi avere un turno assegnato per acquistare il caffè.'); return; }
         if (prod.isCoffee && !prod.usedByShifts.includes(sh)) { alert(`Questo caffè è solo per i turni ${prod.usedByShifts.join('/')}.`); return; }
 
-        const visible = this.productVisibleStock(prod);
-        if (visible <= 0) {
+        const maxAvail = this.productVisibleStock(prod);
+        if (maxAvail <= 0) {
             alert(prod.isCoffee ? `Caffè esaurito nel tuo turno (${sh})!` : `${prod.name} esaurito!`);
             return;
         }
 
-        const payLabel = payNow ? 'pagando subito' : 'a credito';
-        const ctx = prod.isCoffee ? ` (turno ${sh})` : '';
-        if (!confirm(`Acquistare ${prod.name}${ctx} a €${prod.price.toFixed(2)} ${payLabel}?`)) return;
+        const ctx = prod.isCoffee ? ` — turno ${sh}` : '';
+        const payLabel = payNow ? '💵 Pagamento immediato' : '📝 A credito';
+        const payColor = payNow ? '#16a34a' : '#ea580c';
 
-        if (prod.isCoffee) prod.shiftStock[sh] = (prod.shiftStock[sh]||0) - 1;
-        else prod.stock--;
+        modal(`🛒 Acquisto: ${escapeHtml(prod.name)}`, `
+            <div class="alert alert-info">
+                <strong>${escapeHtml(prod.name)}</strong>${ctx}<br>
+                Prezzo unitario: <strong>€${prod.price.toFixed(2)}</strong> · Disponibili: <strong>${maxAvail}</strong>
+            </div>
+            <div class="alert" style="background:${payNow?'#d1fae5':'#fef3c7'};color:${payColor};border-left:4px solid ${payColor}">
+                <strong>${payLabel}</strong>
+            </div>
+            <div class="form-group">
+                <label>Quantità</label>
+                <div class="flex" style="align-items:center;gap:0.5rem">
+                    <button type="button" class="btn btn-gray" onclick="App._buyQtyChange(-1,${maxAvail})" style="font-size:1.3rem;padding:0.4rem 0.9rem">−</button>
+                    <input type="number" id="buy-qty" min="1" max="${maxAvail}" value="1" oninput="App._buyQtyUpdate(${maxAvail})" style="flex:1;text-align:center;font-size:1.3rem;font-weight:700">
+                    <button type="button" class="btn btn-gray" onclick="App._buyQtyChange(1,${maxAvail})" style="font-size:1.3rem;padding:0.4rem 0.9rem">+</button>
+                </div>
+            </div>
+            <div class="alert alert-info text-sm" id="buy-preview">
+                Totale: <strong>€${prod.price.toFixed(2)}</strong>
+            </div>
+            <button class="btn ${payNow?'btn-green':'btn-orange'} btn-full" onclick="App.doBuy('${prod.id}',${payNow})" style="font-size:1rem;padding:0.85rem">
+                ${payNow?'💵 Conferma pagamento':'📝 Conferma credito'}
+            </button>
+        `);
+        this._buyQtyUpdate(maxAvail);
+    },
 
-        this.transactions.push({
-            id: uid(), memberId: me.id, memberName: me.name,
-            productId: prod.id, productName: prod.name,
-            price: prod.price, date: new Date().toISOString(),
-            paid: payNow, shift: prod.isCoffee ? sh : null,
-            isCoffee: !!prod.isCoffee,
-            registeredBy: Auth.user.name, registeredByUid: Auth.user.uid
-        });
+    _buyQtyChange(delta, max) {
+        const el = document.getElementById('buy-qty');
+        let v = parseInt(el.value)||1;
+        v = Math.max(1, Math.min(max, v + delta));
+        el.value = v;
+        this._buyQtyUpdate(max);
+    },
 
-        if (payNow) this.cashRegister += prod.price;
-        else me.balance = (me.balance || 0) + prod.price;
+    _buyQtyUpdate(max) {
+        const el = document.getElementById('buy-qty');
+        if (!el) return;
+        let v = parseInt(el.value)||1;
+        if (v < 1) { v = 1; el.value = 1; }
+        if (v > max) { v = max; el.value = max; }
+        const preview = document.getElementById('buy-preview');
+        if (preview) {
+            const modalTitle = document.querySelector('.modal h2')?.textContent || '';
+            // Estraggo il prezzo dal DOM dell'alert
+            const priceMatch = document.querySelector('.modal .alert-info')?.innerHTML.match(/€(\d+\.\d+)/);
+            const price = priceMatch ? parseFloat(priceMatch[1]) : 0;
+            preview.innerHTML = `${v} × €${price.toFixed(2)} = <strong>€${(v*price).toFixed(2)}</strong>`;
+        }
+    },
 
-        await this.save();
-        alert(`✅ ${prod.name} acquistato${payNow ? ' (pagato)' : ' (a credito)'}!`);
+    async doBuy(prodId, payNow) {
+        const me = this.myMember();
+        if (!me) { alert('Account non collegato.'); return; }
+        const prod = this.products.find(p => p.id === prodId);
+        if (!prod) return;
+
+        const sh = Auth.myShift();
+        const qty = parseInt(document.getElementById('buy-qty').value)||1;
+        if (qty < 1) { alert('Quantità non valida'); return; }
+
+        const maxAvail = this.productVisibleStock(prod);
+        if (qty > maxAvail) { alert(`Disponibili solo ${maxAvail} pezzi!`); return; }
+
+        const totalPrice = qty * prod.price;
+
+        try {
+            // 1) Scala stock (per turno se caffè, generale se altro) — atomico
+            const stockPath = prod.isCoffee
+                ? `bar-data/products/${prod.id}/shiftStock/${sh}`
+                : `bar-data/products/${prod.id}/stock`;
+            await db.ref(stockPath).transaction(curr => Math.max(0, (curr || 0) - qty));
+
+            // 2) Se pagamento immediato: cassa +totale (atomico)
+            //    Se credito: balance del member +totale (atomico)
+            if (payNow) {
+                await db.ref('bar-data/cashRegister').transaction(curr => (curr || 0) + totalPrice);
+            } else {
+                await db.ref(`bar-data/members/${me.id}/balance`).transaction(curr => (curr || 0) + totalPrice);
+            }
+
+            // 3) Registra una singola transazione con quantity (retrocompatibile: senza quantity = 1)
+            const txId = uid();
+            await db.ref(`bar-data/transactions/${txId}`).set({
+                id: txId,
+                memberId: me.id, memberName: me.name,
+                productId: prod.id, productName: prod.name,
+                price: totalPrice, // prezzo TOTALE della transazione
+                unitPrice: prod.price, // prezzo unitario per storico
+                quantity: qty,
+                date: new Date().toISOString(),
+                paid: payNow,
+                shift: prod.isCoffee ? sh : null,
+                isCoffee: !!prod.isCoffee,
+                registeredBy: Auth.user.name,
+                registeredByUid: Auth.user.uid
+            });
+
+            await db.ref('bar-data/lastUpdate').set(new Date().toISOString());
+            modalClose();
+            alert(`✅ ${qty} × ${prod.name} — €${totalPrice.toFixed(2)}\n${payNow ? '(pagato in cassa)' : '(a credito)'}`);
+        } catch(e) {
+            console.error('Errore acquisto:', e);
+            alert('Errore durante l\'acquisto: ' + e.message + '\n\nRiprova.');
+        }
     },
 
     // =====================================================
@@ -1208,7 +1341,7 @@ const App = {
             ${myTx.length === 0 ? '<p class="text-center text-gray" style="padding:2rem">Nessuna transazione</p>' :
                 myTx.map(t => `
                     <div class="tx-item ${t.paid?'paid':'unpaid'}">
-                        <div><strong>${escapeHtml(t.productName)}</strong>${t.shift?` <span class="chip chip-shift">${t.shift}</span>`:''}<br><span class="text-sm text-gray">${fmt(t.date)}</span></div>
+                        <div><strong>${escapeHtml(t.productName)}</strong>${t.quantity && t.quantity > 1 ? ` <span class="chip chip-blue">×${t.quantity}</span>` : ''}${t.shift?` <span class="chip chip-shift">${t.shift}</span>`:''}<br><span class="text-sm text-gray">${fmt(t.date)}</span></div>
                         <div style="text-align:right"><strong>€${t.price.toFixed(2)}</strong><br>
                         <span class="chip ${t.paid?'chip-green':'chip-orange'}">${t.paid?'✓ Pagato':'⏳ Credito'}</span></div>
                     </div>`).join('')}`;
@@ -1265,7 +1398,7 @@ const App = {
             <h3>Ultime vendite</h3>
             ${[...this.transactions].sort((a,b) => new Date(b.date)-new Date(a.date)).slice(0,10).map(t => `
                 <div class="tx-item ${t.paid?'paid':'unpaid'}">
-                    <div><strong>${escapeHtml(t.memberName)}</strong> → ${escapeHtml(t.productName)}${t.shift?` <span class="chip chip-shift">${t.shift}</span>`:''}<br><span class="text-sm text-gray">${fmt(t.date)}</span></div>
+                    <div><strong>${escapeHtml(t.memberName)}</strong> → ${escapeHtml(t.productName)}${t.quantity && t.quantity > 1 ? ` <span class="chip chip-blue">×${t.quantity}</span>` : ''}${t.shift?` <span class="chip chip-shift">${t.shift}</span>`:''}<br><span class="text-sm text-gray">${fmt(t.date)}</span></div>
                     <div style="text-align:right"><strong>€${t.price.toFixed(2)}</strong><br>
                     <span class="chip ${t.paid?'chip-green':'chip-orange'}">${t.paid?'Contanti':'Credito'}</span></div>
                 </div>`).join('')}`;
@@ -1306,8 +1439,8 @@ const App = {
                                 p.isCoffee ? `Turno ${sel.shift}: ${stock}` : `Stock: ${stock}`
                             }</div>
                             ${canSell ? `<div class="flex">
-                                <button class="btn btn-orange btn-sm" style="flex:1" onclick="App.adminSell('${p.id}',false)">Credito</button>
-                                <button class="btn btn-green btn-sm" style="flex:1" onclick="App.adminSell('${p.id}',true)">Paga</button>
+                                <button class="btn btn-orange btn-sm" style="flex:1" onclick="App.modalAdminSell('${p.id}',false)">Credito</button>
+                                <button class="btn btn-green btn-sm" style="flex:1" onclick="App.modalAdminSell('${p.id}',true)">Paga</button>
                             </div>` : '<div class="text-center stock-out" style="font-weight:600;padding:0.3rem">ESAURITO</div>'}
                         </div>`;
                     }).join('')}
@@ -1321,34 +1454,91 @@ const App = {
             `}`;
     },
 
-    async adminSell(prodId, payNow) {
+    modalAdminSell(prodId, payNow) {
         const member = this.members.find(m => m.id === this._saleSelected);
         const prod = this.products.find(p => p.id === prodId);
         if (!member || !prod) return;
         if (prod.isCoffee && !member.shift) { alert('Il vigile non ha un turno assegnato.'); return; }
         if (prod.isCoffee && !prod.usedByShifts.includes(member.shift)) { alert(`Questo caffè non è del turno ${member.shift}.`); return; }
 
-        if (prod.isCoffee) {
-            if ((prod.shiftStock[member.shift]||0) <= 0) { alert(`Caffè esaurito nel turno ${member.shift}!`); return; }
-            prod.shiftStock[member.shift]--;
-        } else {
-            if (prod.stock <= 0) { alert('Esaurito!'); return; }
-            prod.stock--;
+        const maxAvail = prod.isCoffee ? (prod.shiftStock[member.shift]||0) : prod.stock;
+        if (maxAvail <= 0) { alert('Esaurito!'); return; }
+
+        const ctx = prod.isCoffee ? ` — turno ${member.shift}` : '';
+        const payLabel = payNow ? '💵 Pagamento immediato' : '📝 A credito';
+        const payColor = payNow ? '#16a34a' : '#ea580c';
+
+        modal(`🛒 Vendita: ${escapeHtml(prod.name)}`, `
+            <div class="alert alert-info">
+                Vigile: <strong>${escapeHtml(member.name)}</strong>${member.shift?` [T${member.shift}]`:''}<br>
+                Prodotto: <strong>${escapeHtml(prod.name)}</strong>${ctx}<br>
+                Prezzo unitario: <strong>€${prod.price.toFixed(2)}</strong> · Disponibili: <strong>${maxAvail}</strong>
+            </div>
+            <div class="alert" style="background:${payNow?'#d1fae5':'#fef3c7'};color:${payColor};border-left:4px solid ${payColor}">
+                <strong>${payLabel}</strong>
+            </div>
+            <div class="form-group">
+                <label>Quantità</label>
+                <div class="flex" style="align-items:center;gap:0.5rem">
+                    <button type="button" class="btn btn-gray" onclick="App._buyQtyChange(-1,${maxAvail})" style="font-size:1.3rem;padding:0.4rem 0.9rem">−</button>
+                    <input type="number" id="buy-qty" min="1" max="${maxAvail}" value="1" oninput="App._buyQtyUpdate(${maxAvail})" style="flex:1;text-align:center;font-size:1.3rem;font-weight:700">
+                    <button type="button" class="btn btn-gray" onclick="App._buyQtyChange(1,${maxAvail})" style="font-size:1.3rem;padding:0.4rem 0.9rem">+</button>
+                </div>
+            </div>
+            <div class="alert alert-info text-sm" id="buy-preview">
+                Totale: <strong>€${prod.price.toFixed(2)}</strong>
+            </div>
+            <button class="btn ${payNow?'btn-green':'btn-orange'} btn-full" onclick="App.doAdminSell('${prod.id}',${payNow})" style="font-size:1rem;padding:0.85rem">
+                ${payNow?'💵 Conferma pagamento':'📝 Conferma credito'}
+            </button>
+        `);
+        this._buyQtyUpdate(maxAvail);
+    },
+
+    async doAdminSell(prodId, payNow) {
+        const member = this.members.find(m => m.id === this._saleSelected);
+        const prod = this.products.find(p => p.id === prodId);
+        if (!member || !prod) return;
+
+        const qty = parseInt(document.getElementById('buy-qty').value)||1;
+        if (qty < 1) { alert('Quantità non valida'); return; }
+
+        const maxAvail = prod.isCoffee ? (prod.shiftStock[member.shift]||0) : prod.stock;
+        if (qty > maxAvail) { alert(`Disponibili solo ${maxAvail} pezzi!`); return; }
+
+        const totalPrice = qty * prod.price;
+
+        try {
+            const stockPath = prod.isCoffee
+                ? `bar-data/products/${prod.id}/shiftStock/${member.shift}`
+                : `bar-data/products/${prod.id}/stock`;
+            await db.ref(stockPath).transaction(curr => Math.max(0, (curr || 0) - qty));
+
+            if (payNow) {
+                await db.ref('bar-data/cashRegister').transaction(curr => (curr || 0) + totalPrice);
+            } else {
+                await db.ref(`bar-data/members/${member.id}/balance`).transaction(curr => (curr || 0) + totalPrice);
+            }
+
+            const txId = uid();
+            await db.ref(`bar-data/transactions/${txId}`).set({
+                id: txId,
+                memberId: member.id, memberName: member.name,
+                productId: prod.id, productName: prod.name,
+                price: totalPrice, unitPrice: prod.price, quantity: qty,
+                date: new Date().toISOString(),
+                paid: payNow, shift: prod.isCoffee ? member.shift : null,
+                isCoffee: !!prod.isCoffee,
+                registeredBy: Auth.user.name, registeredByUid: Auth.user.uid
+            });
+
+            await db.ref('bar-data/lastUpdate').set(new Date().toISOString());
+            modalClose();
+            alert(`✅ ${qty} × ${prod.name} → ${member.name}\n€${totalPrice.toFixed(2)} (${payNow?'pagato':'credito'})`);
+        } catch(e) {
+            console.error('Errore vendita:', e);
+            alert('Errore: ' + e.message);
         }
-
-        this.transactions.push({
-            id: uid(), memberId: member.id, memberName: member.name,
-            productId: prod.id, productName: prod.name,
-            price: prod.price, date: new Date().toISOString(),
-            paid: payNow, shift: prod.isCoffee ? member.shift : null,
-            isCoffee: !!prod.isCoffee,
-            registeredBy: Auth.user.name, registeredByUid: Auth.user.uid
-        });
-        if (payNow) this.cashRegister += prod.price;
-        else member.balance = (member.balance||0) + prod.price;
-
-        await this.save();
-        alert(`✅ ${prod.name} → ${member.name} (${payNow?'pagato':'credito'})`);
     },
 
     // ---- MAGAZZINO (admin) ----
@@ -1614,7 +1804,7 @@ const App = {
             <div class="alert alert-info">Debito: <strong style="color:${(m.balance||0)>0?'#dc2626':'#16a34a'}">€${(m.balance||0).toFixed(2)}</strong></div>
             ${tx.length===0?'<p class="text-center text-gray">Nessuna transazione</p>':
                 tx.map(t=>`<div class="tx-item ${t.paid?'paid':'unpaid'}" style="font-size:0.85rem">
-                    <div><strong>${escapeHtml(t.productName)}</strong>${t.shift?` <span class="chip chip-shift">${t.shift}</span>`:''}<br><span class="text-gray">${fmt(t.date)}</span></div>
+                    <div><strong>${escapeHtml(t.productName)}</strong>${t.quantity && t.quantity > 1 ? ` <span class="chip chip-blue">×${t.quantity}</span>` : ''}${t.shift?` <span class="chip chip-shift">${t.shift}</span>`:''}<br><span class="text-gray">${fmt(t.date)}</span></div>
                     <div style="text-align:right"><strong>€${t.price.toFixed(2)}</strong><br>
                     <span class="chip ${t.paid?'chip-green':'chip-orange'}">${t.paid?'Pagato':'Credito'}</span></div>
                 </div>`).join('')}
@@ -1668,7 +1858,7 @@ const App = {
                     ${allTx.length===0?'<p class="text-center text-gray">Nessuna vendita</p>':
                         allTx.slice(0,50).map(t=>`
                             <div class="tx-item ${t.paid?'paid':'unpaid'}">
-                                <div><strong>${escapeHtml(t.memberName)}</strong> → ${escapeHtml(t.productName)}${t.shift?` <span class="chip chip-shift">${t.shift}</span>`:''}<br><span class="text-sm text-gray">${fmt(t.date)}</span></div>
+                                <div><strong>${escapeHtml(t.memberName)}</strong> → ${escapeHtml(t.productName)}${t.quantity && t.quantity > 1 ? ` <span class="chip chip-blue">×${t.quantity}</span>` : ''}${t.shift?` <span class="chip chip-shift">${t.shift}</span>`:''}<br><span class="text-sm text-gray">${fmt(t.date)}</span></div>
                                 <div style="text-align:right"><strong>€${t.price.toFixed(2)}</strong><br>
                                 <span class="chip ${t.paid?'chip-green':'chip-orange'}">${t.paid?'Pagato':'Credito'}</span></div>
                             </div>`).join('')}
