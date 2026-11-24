@@ -561,7 +561,10 @@ const Auth = {
     },
     myShift() {
         if (typeof App !== 'undefined' && App.previewShift) return App.previewShift;
-        return this.user ? this.user.shift : null;
+        if (!this.user) return null;
+        const m = (typeof App !== 'undefined') ? App.myMember() : null;
+        if (m && m.shift) return m.shift; // la scheda vigile comanda
+        return this.user.shift || null;
     },
     myUid() { return this.user ? this.user.uid : null; }
 };
@@ -627,6 +630,7 @@ const App = {
             this.transactions = toArr(d.transactions);
             this.purchases = toArr(d.purchases);
             this._updateOnline(true);
+            this._syncShifts();
             this.render();
         }, err => {
             console.error('DB error:', err);
@@ -643,6 +647,7 @@ const App = {
                 const fresh = val[Auth.user.uid];
                 Auth.user = { ...Auth.user, role: fresh.role, shift: fresh.shift || null, name: fresh.name };
             }
+            this._syncShifts();
             this.render();
         });
         this.listeners.push(() => usersRef.off());
@@ -673,6 +678,41 @@ const App = {
     // =============================================
     // Vigili attivi (esclusi i trasferiti/rimossi, che restano nel database con il loro storico)
     active() { return this.members.filter(m => !m.removed); },
+
+    // Account di un turno, presi dalle schede vigile: turno e nome sono quelli della scheda (il registro)
+    peopleOfShift(sh) {
+        const out = [];
+        this.active().forEach(m => {
+            if (m.shift !== sh || !m.userId) return;
+            const u = this.users.find(x => x.uid === m.userId);
+            if (u) out.push({ ...u, name: m.name, accountName: u.name, shift: m.shift });
+        });
+        // admin con account ma senza scheda collegata (caso raro): li mostro comunque
+        this.users.forEach(u => {
+            if (u.role === 'admin' && u.shift === sh && !this.members.some(m => m.userId === u.uid)) out.push({ ...u, accountName: u.name });
+        });
+        return out.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    },
+
+    // Allinea il turno dell'account a quello della scheda (es. spostamenti fatti prima della migrazione)
+    _syncShifts() {
+        if (!Auth.user || !(Auth.user.role === 'referente' || Auth.user.role === 'super_admin') || this.previewShift || this._syncing) return;
+        if (this.schemaVersion !== 3 || !this.users.length || !this.members.length) return;
+        const updates = {};
+        this.active().forEach(m => {
+            if (!m.userId || !m.shift) return;
+            const u = this.users.find(x => x.uid === m.userId);
+            if (!u || u.role === 'referente' || u.role === 'super_admin') return;
+            if ((u.shift || null) !== m.shift) {
+                updates[`users/${u.uid}/shift`] = m.shift;
+                if (u.role === 'admin') updates[`users/${u.uid}/role`] = 'vigile'; // era admin del vecchio turno
+            }
+        });
+        if (Object.keys(updates).length === 0) return;
+        this._syncing = true;
+        console.log('[sync turni]', updates);
+        db.ref().update(updates).catch(e => console.error('sync turni', e)).finally(() => { this._syncing = false; });
+    },
 
     myMember() {
         if (!Auth.user) return null;
@@ -1028,7 +1068,7 @@ App.page_ref_bar = function() {
     const vigiliTurno = this.members.filter(m => m.shift === sh);
     const totCrediti = this.crediti(sh);
     const stato = this.quotaStatus(sh);
-    const adminTurno = this.users.filter(u => u.role === 'admin' && u.shift === sh);
+    const adminTurno = this.peopleOfShift(sh).filter(u => u.role === 'admin');
 
     return `
         <div class="flex-between mb-2">
@@ -1174,7 +1214,7 @@ App.page_ref_vigili = function() {
         return `
             <div class="item-row ${hasAnyDebt?'warn':'ok'}">
                 <div class="item-main">
-                    <div class="item-title">${escapeHtml(m.name)} ${removed ? '<span class="chip chip-gray">trasferito</span>' : `<span class="chip chip-shift">T${m.shift || '?'}</span>`}</div>
+                    <div class="item-title">${escapeHtml(m.name)} ${removed ? '<span class="chip chip-gray">trasferito</span>' : (m.shift ? `<span class="chip chip-shift">T${m.shift}</span>` : `<span class="chip chip-gray">${(this.users.find(u => u.uid === m.userId) || {}).role === 'referente' ? 'Referente' : 'senza turno'}</span>`)}</div>
                     <div class="item-sub">
                         ${removed ? 'Uscito il ' + fmt(m.removedAt).split(',')[0] + ' · ' : (m.userId ? 'Collegato · ' : 'Non collegato · ')}
                         ${totDebt > 0 ? `Bar: <strong class="color-red">€${totDebt.toFixed(2)}</strong>` : 'Bar: €0'}
@@ -1276,8 +1316,9 @@ App.page_ref_admin = function() {
         <h3>🔧 Admin primi dei turni</h3>
         <div class="text-sm text-gray mb-1">Un admin per turno viene nominato da te. Da lì, lui/lei può nominare altri admin del proprio turno.</div>
         ${SHIFTS.map(sh => {
-            const admins = this.users.filter(u => u.role === 'admin' && u.shift === sh);
-            const vigiliTurno = this.users.filter(u => isVigileRole(u.role) && u.shift === sh);
+            const people = this.peopleOfShift(sh);
+            const admins = people.filter(u => u.role === 'admin');
+            const vigiliTurno = people.filter(u => isVigileRole(u.role));
             return `
                 <details class="collapsible-section">
                     <summary>Turno ${sh} — ${admins.length} admin${admins.length===1?'':''}</summary>
@@ -1857,8 +1898,9 @@ App.page_admin_settings = function() {
     const bar = this.bars[sh];
     if (!bar) return '<div class="alert alert-warn">Bar non configurato</div>';
 
-    const adminTurno = this.users.filter(u => u.role === 'admin' && u.shift === sh);
-    const vigiliTurno = this.users.filter(u => isVigileRole(u.role) && u.shift === sh);
+    const people = this.peopleOfShift(sh);
+    const adminTurno = people.filter(u => u.role === 'admin');
+    const vigiliTurno = people.filter(u => isVigileRole(u.role));
     const quotaStato = this.quotaStatus(sh);
 
     return `
@@ -2868,17 +2910,19 @@ App._refreshUsers = async function() {
 App.modalLinkUser = function(userUid, userName) {
     const u = this.users.find(x => x.uid === userUid);
     if (!u) return;
-    const available = this.active().filter(m => !m.userId && m.shift === u.shift);
+    // prima le schede del turno dichiarato dall'account, poi tutte le altre libere
+    const available = this.active().filter(m => !m.userId)
+        .sort((a, b) => ((b.shift === u.shift) - (a.shift === u.shift)) || a.name.localeCompare(b.name));
     modal(`🔗 Collega "${escapeHtml(u.name)}"`, `
         <div class="alert alert-info">Account <strong>${escapeHtml(u.name)}</strong> (${escapeHtml(u.email)}) · Turno ${u.shift || '?'}</div>
         <div class="text-sm text-gray mb-1">Scegli il vigile dell'elenco da collegare. Lo storico passa al nuovo account.</div>
-        ${available.length === 0 ? '<div class="alert alert-warn">Nessun vigile disponibile nel suo turno</div>' :
-            available.sort((a,b) => a.name.localeCompare(b.name)).map(m => {
+        ${available.length === 0 ? '<div class="alert alert-warn">Nessuna scheda libera: usa "Nuovo vigile"</div>' :
+            available.map(m => {
                 const dbt = (m.balancePerBar || {})[m.shift] || 0;
                 return `
                     <div class="item-row">
                         <div class="item-main">
-                            <div class="item-title">${escapeHtml(m.name)}</div>
+                            <div class="item-title">${escapeHtml(m.name)} <span class="chip chip-shift">T${m.shift || '?'}</span></div>
                             <div class="item-sub">${dbt > 0 ? 'Debito: €'+dbt.toFixed(2) : 'Nessun debito'}</div>
                         </div>
                         <button class="btn btn-blue btn-sm" onclick="App.linkMemberToUser('${m.id}','${userUid}')">Collega</button>
@@ -2891,7 +2935,8 @@ App.modalLinkUser = function(userUid, userName) {
 App.modalLinkMember = function(memberId, memberName) {
     const m = this.members.find(x => x.id === memberId);
     if (!m) return;
-    const available = this.users.filter(u => !this.members.some(mm => mm.userId === u.uid) && (!u.shift || u.shift === m.shift));
+    const available = this.users.filter(u => !this.members.some(mm => mm.userId === u.uid) && u.role !== 'disattivato')
+        .sort((a, b) => ((b.shift === m.shift) - (a.shift === m.shift)) || (a.name||'').localeCompare(b.name||''));
     modal(`🔗 Collega "${escapeHtml(m.name)}"`, `
         <div class="alert alert-info">Vigile <strong>${escapeHtml(m.name)}</strong> · Turno ${m.shift || '?'}</div>
         ${available.length === 0 ? '<div class="alert alert-warn">Nessun account disponibile</div>' :
@@ -2915,6 +2960,7 @@ App.linkMemberToUser = async function(memberId, userUid) {
     try {
         await db.ref(`bar-data/members/${memberId}/userId`).set(userUid);
         if (u.role === 'referente' || u.role === 'super_admin') await db.ref(`bar-data/members/${memberId}/shift`).set(null);
+        else if (m.shift && u.shift !== m.shift) await db.ref(`users/${userUid}/shift`).set(m.shift); // il turno lo decide la scheda
         modalClose();
         alert(`✅ Collegati: ${u.name} ↔ ${m.name}`);
     } catch(e) { alert('Errore: ' + e.message); }
