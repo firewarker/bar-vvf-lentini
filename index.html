@@ -321,7 +321,14 @@ const firebaseConfig = {
     appId: "1:671303628842:web:5c9abff4aa1ed7f99b6b53"
 };
 firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
+const _fdb = firebase.database();
+// Durante l'anteprima del Referente ogni scrittura viene rifiutata: si guarda, non si modifica
+function _readOnlyRef(r) {
+    const ro = () => Promise.reject(new Error('👁️ sei in anteprima: nessuna modifica viene salvata.'));
+    return { on: (...a) => r.on(...a), off: (...a) => r.off(...a), once: (...a) => r.once(...a),
+             set: ro, update: ro, remove: ro, transaction: ro };
+}
+const db = { ref(p) { const r = _fdb.ref(p); return (typeof App !== 'undefined' && App.previewShift) ? _readOnlyRef(r) : r; } };
 const fbAuth = firebase.auth();
 
 // =============================================
@@ -541,14 +548,21 @@ const Auth = {
 
     // Role checks
     // 'super_admin' è il vecchio nome del Referente (prima della migrazione)
-    isReferente() { return !!this.user && (this.user.role === 'referente' || this.user.role === 'super_admin'); },
+    isReferente() {
+        if (typeof App !== 'undefined' && App.previewShift) return false; // in anteprima si vede come un admin
+        return !!this.user && (this.user.role === 'referente' || this.user.role === 'super_admin');
+    },
+    effRole() { return (typeof App !== 'undefined' && App.previewShift) ? 'admin' : (this.user ? this.user.role : null); },
     isAdmin() { return !!this.user && (this.user.role === 'admin' || this.isReferente()); },
     isAdminOf(shift) {
         if (!this.user) return false;
         if (this.isReferente()) return true;
         return this.user.role === 'admin' && this.user.shift === shift;
     },
-    myShift() { return this.user ? this.user.shift : null; },
+    myShift() {
+        if (typeof App !== 'undefined' && App.previewShift) return App.previewShift;
+        return this.user ? this.user.shift : null;
+    },
     myUid() { return this.user ? this.user.uid : null; }
 };
 </script>
@@ -743,6 +757,7 @@ const App = {
         let title = '🚒 Bar VVF Lentini';
         let roleBadge = '';
         if (Auth.isReferente()) roleBadge = '<span class="badge badge-ref">👑 Referente</span>';
+        else if (this.previewShift) roleBadge = '<span class="badge badge-ref">👁️ Anteprima Bar T' + sh + '</span>';
         else if (u.role === 'admin') roleBadge = '<span class="badge badge-admin">🔧 Admin T' + (sh || '-') + '</span>';
         else roleBadge = '<span class="badge badge-user">T' + (sh || '-') + '</span>';
 
@@ -791,7 +806,7 @@ const App = {
                 ['vigili','👥','Vigili'],
                 ['admin','👑','Admin']
             ];
-        } else if (Auth.user.role === 'admin') {
+        } else if (Auth.effRole() === 'admin') {
             tabs = [
                 ['home','🏠','Home'],
                 ['acquista','🛒','Acquista'],
@@ -814,6 +829,21 @@ const App = {
     },
 
     switchTab(t) { this.tab = t; this.render(); },
+
+    previewShift: null,
+    startPreview(shift) {
+        this._viewingBar = shift;
+        this.previewShift = shift;
+        this.tab = 'home';
+        window.scrollTo && window.scrollTo(0, 0);
+        this.render();
+    },
+    exitPreview() {
+        this.previewShift = null;
+        this.tab = 'bar';
+        modalClose();
+        this.render();
+    },
 
     _renderContent() {
         const u = Auth.user;
@@ -849,7 +879,7 @@ const App = {
                 else if (this.tab === 'vigili') html = this.page_ref_vigili();
                 else if (this.tab === 'admin') html = this.page_ref_admin();
                 else { this.tab='home'; html = this.page_ref_home(); }
-            } else if (u.role === 'admin') {
+            } else if (Auth.effRole() === 'admin') {
                 if (this.tab === 'home') html = this.page_user_home();
                 else if (this.tab === 'acquista') html = this.page_acquista();
                 else if (this.tab === 'vendita') html = this.page_admin_vendita();
@@ -867,6 +897,14 @@ const App = {
         } catch(e) {
             console.error('Render error:', e);
             html = '<div class="alert alert-danger">Errore: ' + escapeHtml(e.message) + '</div>';
+        }
+        if (this.previewShift) {
+            html = `<div class="alert alert-warn">
+                <div class="flex-between">
+                    <div><strong>👁️ Anteprima Bar Turno ${this.previewShift}</strong><br><span class="text-sm">Vedi quello che vede l'admin del turno. Puoi aprire tutto, ma niente viene salvato.</span></div>
+                    <button class="btn btn-red btn-sm" onclick="App.exitPreview()">Esci</button>
+                </div>
+            </div>` + html;
         }
         document.getElementById('content').innerHTML = html;
     }
@@ -978,7 +1016,10 @@ App.page_ref_bar = function() {
     if (!sh) {
         return `
             <h2>🏪 Bar dei turni</h2>
-            <div class="text-sm text-gray mb-1">Seleziona un turno per vedere il dettaglio del bar.</div>
+            <div class="text-sm text-gray mb-1">Tocca un turno per il riepilogo, oppure apri l'anteprima per vedere il bar come lo vede il suo admin.</div>
+            <div class="flex mb-2">
+                ${SHIFTS.map(s => `<button class="btn btn-light btn-sm" style="flex:1" onclick="App.startPreview('${s}')">👁️ ${s}</button>`).join('')}
+            </div>
             ${SHIFTS.map(s => this._renderBarCard(s)).join('')}
         `;
     }
@@ -994,7 +1035,7 @@ App.page_ref_bar = function() {
             <h2 style="margin:0">🏪 ${escapeHtml(bar.name)}</h2>
             <button class="btn btn-light btn-sm" onclick="App._viewingBar=null;App.render()">← Indietro</button>
         </div>
-        <div class="alert alert-info">🔍 Modalità ispezione · Non modificare dati di altri turni</div>
+        <button class="btn btn-blue btn-full mb-2" onclick="App.startPreview('${sh}')">👁️ Apri il bar come lo vede l'admin</button>
 
         ${stato !== 'pagata' ? `<div class="alert ${stato==='ritardo'?'alert-danger':'alert-warn'}">⚠️ Quote non versate: <strong>${this.unpaidMonths(sh).map(formatMonth).join(', ')}</strong></div>` : ''}
         ${stato !== 'pagata' ? `<button class="btn btn-warn btn-full mb-2" onclick="App.sollecita('${sh}')">🔔 Sollecita admin del turno</button>` : ''}
@@ -1320,7 +1361,7 @@ App.page_user_home = function() {
     const bpb = me ? (me.balancePerBar || {}) : {};
     const myDebt = sh ? (bpb[sh] || 0) : 0;
     const myTx = me ? this.transactions.filter(t => t.memberId === me.id).sort((a,b) => new Date(b.date)-new Date(a.date)).slice(0,10) : [];
-    const isAdmin = u.role === 'admin';
+    const isAdmin = Auth.effRole() === 'admin';
     const quotaStato = sh ? this.quotaStatus(sh) : null;
 
     // Banner amministrativo: quota mensile da versare (+ eventuale sollecito del Referente)
@@ -1900,7 +1941,7 @@ App.page_admin_settings = function() {
 // ============ ACQUISTO (vigile normale o ospite) ============
 App.modalBuy = function(prodId, shift, payNow, isAdminSale) {
     const me = this.myMember();
-    if (!me && !Auth.isReferente()) { alert('Account non collegato. Chiedi al Referente.'); return; }
+    if (!me && !Auth.isReferente() && !this.previewShift) { alert('Account non collegato. Chiedi al Referente.'); return; }
     const prod = (this.products[shift] || []).find(p => p.id === prodId);
     if (!prod) return;
     const maxAvail = prod.stock || 0;
@@ -1954,6 +1995,7 @@ App._qtyUpdate = function(max, price) {
 
 App.doBuy = async function(prodId, shift, payNow, isAdminSale) {
     const me = this.myMember();
+    if (this.previewShift) { alert('Errore: 👁️ sei in anteprima: nessuna modifica viene salvata.'); return; }
     if (!me) { alert('Account non collegato.'); return; }
     const prod = (this.products[shift] || []).find(p => p.id === prodId);
     if (!prod) return;
