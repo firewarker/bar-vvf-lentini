@@ -657,6 +657,9 @@ const App = {
     // =============================================
     // HELPERS state
     // =============================================
+    // Vigili attivi (esclusi i trasferiti/rimossi, che restano nel database con il loro storico)
+    active() { return this.members.filter(m => !m.removed); },
+
     myMember() {
         if (!Auth.user) return null;
         return this.members.find(m => m.userId === Auth.user.uid);
@@ -753,7 +756,7 @@ const App = {
                 <div class="header-stat"><div class="hs-label">💰 Fondo</div><div class="hs-value">€${this.fondo.saldo.toFixed(2)}</div></div>
                 <div class="header-stat"><div class="hs-label">🏦 Casse tot</div><div class="hs-value">€${this._sumCasse().toFixed(2)}</div></div>
                 <div class="header-stat"><div class="hs-label">📊 Crediti</div><div class="hs-value">€${this._sumCrediti().toFixed(2)}</div></div>
-                <div class="header-stat"><div class="hs-label">👥 Vigili</div><div class="hs-value">${this.members.length}</div></div>
+                <div class="header-stat"><div class="hs-label">👥 Vigili</div><div class="hs-value">${this.active().length}</div></div>
             `;
         } else {
             // vigile/admin — vede il suo bar
@@ -764,7 +767,7 @@ const App = {
                 <div class="header-stat"><div class="hs-label">💰 Cassa T${sh||'-'}</div><div class="hs-value">€${bar ? bar.cassa.toFixed(2) : '0.00'}</div></div>
                 <div class="header-stat"><div class="hs-label">📊 Mio debito</div><div class="hs-value">€${debtInMyBar.toFixed(2)}</div></div>
                 <div class="header-stat"><div class="hs-label">☕ Caffè</div><div class="hs-value">${this._countCoffee(sh)}</div></div>
-                <div class="header-stat"><div class="hs-label">👥 T${sh||'-'}</div><div class="hs-value">${this.members.filter(m=>m.shift===sh).length}</div></div>
+                <div class="header-stat"><div class="hs-label">👥 T${sh||'-'}</div><div class="hs-value">${this.active().filter(m=>m.shift===sh).length}</div></div>
             `;
         }
     },
@@ -815,6 +818,15 @@ const App = {
     _renderContent() {
         const u = Auth.user;
         let html = '';
+        // Account disattivato (trasferito): nessun accesso al bar
+        if (u.role === 'disattivato') {
+            document.getElementById('tabs').innerHTML = '';
+            document.getElementById('header-stats').innerHTML = '';
+            document.getElementById('content').innerHTML = `
+                <h2>🚪 Account disattivato</h2>
+                <div class="alert alert-info">Il tuo account non è più attivo in questo distaccamento (trasferimento o uscita). Se rientri, chiedi al Referente di riattivarlo.</div>`;
+            return;
+        }
         // Database non ancora migrato: l'app nuova non deve essere usata
         if (this.schemaVersion !== undefined && this.schemaVersion !== 3) {
             const isRef = Auth.isReferente() || (u.email || '').toLowerCase() === REFERENTE_EMAIL;
@@ -952,7 +964,7 @@ App._renderBarCard = function(shift) {
             <div class="bc-meta">
                 <span>Cassa <strong>€${bar.cassa.toFixed(2)}</strong></span>
                 <span>Crediti <strong>€${this.crediti(shift).toFixed(2)}</strong></span>
-                <span>Vigili <strong>${this.members.filter(m=>m.shift===shift).length}</strong></span>
+                <span>Vigili <strong>${this.active().filter(m=>m.shift===shift).length}</strong></span>
             </div>
         </div>
     `;
@@ -1111,39 +1123,110 @@ App._speseMese = function() {
 
 // ---- Vigili (Referente): elenco totale ----
 App.page_ref_vigili = function() {
-    const sorted = [...this.members].sort((a,b) => (a.shift||'Z').localeCompare(b.shift||'Z') || a.name.localeCompare(b.name));
-    return `
-        <h2>👥 Tutti i vigili (${this.members.length})</h2>
-        <div class="text-sm text-gray mb-1">Vista globale: crediti nel bar + debito pre-riforma (al fondo).</div>
-        ${sorted.map(m => {
-            const totDebt = this.totalDebtOfMember(m.id);
-            const dbtFondo = m.debitoFondo || 0;
-            const hasAnyDebt = totDebt > 0 || dbtFondo > 0;
-            return `
-                <div class="item-row ${hasAnyDebt?'warn':'ok'}">
-                    <div class="item-main">
-                        <div class="item-title">${escapeHtml(m.name)} <span class="chip chip-shift">T${m.shift || '?'}</span></div>
-                        <div class="item-sub">
-                            ${m.userId ? 'Collegato · ' : 'Non collegato · '}
-                            ${totDebt > 0 ? `Bar: <strong class="color-red">€${totDebt.toFixed(2)}</strong>` : 'Bar: €0'}
-                            ${dbtFondo > 0 ? ` · Pre-riforma: <strong class="color-orange">€${dbtFondo.toFixed(2)}</strong>` : ''}
-                        </div>
-                    </div>
-                    <div>
-                        <div class="item-actions">
-                            ${dbtFondo > 0 ? `<button class="btn btn-warn btn-sm" onclick="App.modalPayFondo('${m.id}')" title="Registra saldo al fondo">💰 Salda</button>` : ''}
-                            <button class="btn btn-light btn-sm" onclick="App.modalChangeShift('${m.id}')" title="Cambia turno">🔄</button>
-                        </div>
+    const byShift = (a,b) => (a.shift||'Z').localeCompare(b.shift||'Z') || a.name.localeCompare(b.name);
+    const attivi = this.active().sort(byShift);
+    const rimossi = this.members.filter(m => m.removed).sort((a,b) => a.name.localeCompare(b.name));
+    const row = (m, removed) => {
+        const totDebt = this.totalDebtOfMember(m.id);
+        const dbtFondo = m.debitoFondo || 0;
+        const hasAnyDebt = totDebt > 0 || dbtFondo > 0;
+        return `
+            <div class="item-row ${hasAnyDebt?'warn':'ok'}">
+                <div class="item-main">
+                    <div class="item-title">${escapeHtml(m.name)} ${removed ? '<span class="chip chip-gray">trasferito</span>' : `<span class="chip chip-shift">T${m.shift || '?'}</span>`}</div>
+                    <div class="item-sub">
+                        ${removed ? 'Uscito il ' + fmt(m.removedAt).split(',')[0] + ' · ' : (m.userId ? 'Collegato · ' : 'Non collegato · ')}
+                        ${totDebt > 0 ? `Bar: <strong class="color-red">€${totDebt.toFixed(2)}</strong>` : 'Bar: €0'}
+                        ${dbtFondo > 0 ? ` · Pre-riforma: <strong class="color-orange">€${dbtFondo.toFixed(2)}</strong>` : ''}
                     </div>
                 </div>
-            `;
-        }).join('')}
+                <div class="item-actions">
+                    ${dbtFondo > 0 ? `<button class="btn btn-warn btn-sm" onclick="App.modalPayFondo('${m.id}')" title="Registra saldo al fondo">💰 Salda</button>` : ''}
+                    ${removed
+                        ? `<button class="btn btn-green btn-sm" onclick="App.modalReactivate('${m.id}')">↩️ Riattiva</button>`
+                        : `<button class="btn btn-light btn-sm" onclick="App.modalChangeShift('${m.id}')" title="Cambia turno">🔄</button>
+                           <button class="btn btn-sm" style="background:#fee2e2;color:#991b1b" onclick="App.modalRemoveMember('${m.id}')" title="Trasferito / rimuovi">🚪</button>`}
+                </div>
+            </div>`;
+    };
+    return `
+        <h2>👥 Vigili del distaccamento (${attivi.length})</h2>
+        <div class="text-sm text-gray mb-1">🔄 cambia turno · 🚪 trasferito/rimuovi. Chi arriva si registra nell'app e lo aggiungi da 👑 Admin con "Nuovo".</div>
+        ${attivi.map(m => row(m, false)).join('')}
+        ${rimossi.length ? `
+            <details class="collapsible-section mt-2">
+                <summary>🚪 Trasferiti / rimossi (${rimossi.length})</summary>
+                <div class="collapsible-body">${rimossi.map(m => row(m, true)).join('')}</div>
+            </details>` : ''}
     `;
+};
+
+// Trasferimento in uscita: niente viene cancellato, la scheda va tra i "trasferiti" e l'account viene disattivato
+App.modalRemoveMember = function(memberId) {
+    const m = this.members.find(x => x.id === memberId);
+    if (!m) return;
+    const bar = this.totalDebtOfMember(m.id), fondo = m.debitoFondo || 0;
+    modal(`🚪 Rimuovi ${escapeHtml(m.name)}`, `
+        <div class="alert alert-info text-sm">
+            Per trasferimento o uscita dal distaccamento. <strong>Non si cancella nulla</strong>: lo storico resta, il suo account viene disattivato e non compare più nelle liste. Se rientra lo riattivi.
+        </div>
+        ${(bar > 0 || fondo > 0) ? `<div class="alert alert-warn">⚠️ Ha ancora debiti: ${bar > 0 ? 'bar €' + bar.toFixed(2) : ''}${bar > 0 && fondo > 0 ? ' · ' : ''}${fondo > 0 ? 'pre-riforma €' + fondo.toFixed(2) : ''}.<br>Conviene farglieli saldare prima. Se procedi restano registrati e si possono saldare anche dopo.</div>` : '<div class="alert alert-ok">✅ Nessun debito</div>'}
+        <div class="form-group"><label>Motivo</label>
+            <select id="rm-reason"><option>Trasferito</option><option>Pensione</option><option>Altro</option></select>
+        </div>
+        <button class="btn btn-red btn-full" onclick="App.doRemoveMember('${memberId}')">Conferma rimozione</button>
+    `);
+};
+App.doRemoveMember = async function(memberId) {
+    const m = this.members.find(x => x.id === memberId);
+    if (!m) return;
+    const reason = document.getElementById('rm-reason').value;
+    if (m.userId && m.userId === Auth.myUid()) { alert('Non puoi rimuovere te stesso.'); return; }
+    try {
+        const updates = {};
+        updates[`bar-data/members/${memberId}/removed`] = true;
+        updates[`bar-data/members/${memberId}/removedAt`] = new Date().toISOString();
+        updates[`bar-data/members/${memberId}/removedReason`] = reason;
+        if (m.userId && this.users.some(u => u.uid === m.userId)) updates[`users/${m.userId}/role`] = 'disattivato';
+        await db.ref().update(updates);
+        modalClose();
+        alert(`✅ ${m.name} rimosso (${reason}). Lo trovi in fondo alla lista, tra i trasferiti.`);
+    } catch(e) { alert('Errore: ' + e.message); }
+};
+
+// Rientro: riattiva la scheda e l'account, anche in un turno diverso
+App.modalReactivate = function(memberId) {
+    const m = this.members.find(x => x.id === memberId);
+    if (!m) return;
+    modal(`↩️ Riattiva ${escapeHtml(m.name)}`, `
+        <div class="alert alert-info text-sm">Torna attivo con il suo storico e i suoi eventuali debiti. Scegli il turno:</div>
+        <div class="shift-pick">
+            ${SHIFTS.map(s => `<button class="shift-opt ${m.shift===s?'selected':''}" onclick="App.doReactivate('${memberId}','${s}')">${s}</button>`).join('')}
+        </div>
+    `);
+};
+App.doReactivate = async function(memberId, shift) {
+    const m = this.members.find(x => x.id === memberId);
+    if (!m) return;
+    try {
+        const updates = {};
+        updates[`bar-data/members/${memberId}/removed`] = null;
+        updates[`bar-data/members/${memberId}/removedAt`] = null;
+        updates[`bar-data/members/${memberId}/removedReason`] = null;
+        updates[`bar-data/members/${memberId}/shift`] = shift;
+        if (m.userId && this.users.some(u => u.uid === m.userId)) {
+            updates[`users/${m.userId}/role`] = 'vigile';
+            updates[`users/${m.userId}/shift`] = shift;
+        }
+        await db.ref().update(updates);
+        modalClose();
+        alert(`✅ ${m.name} di nuovo attivo nel turno ${shift}`);
+    } catch(e) { alert('Errore: ' + e.message); }
 };
 
 // ---- Admin pannello (Referente): nomina primi admin + migrazione account ----
 App.page_ref_admin = function() {
-    const vigiliSenzaLink = this.members.filter(m => !m.userId);
+    const vigiliSenzaLink = this.active().filter(m => !m.userId);
     const usersNonLinked = this.users.filter(u => !this.members.some(m => m.userId === u.uid));
 
     return `
@@ -1418,8 +1501,8 @@ App.page_admin_vendita = function() {
     if (!sh) return '<div class="alert alert-warn">Turno non assegnato</div>';
     const bar = this.bars[sh];
     if (!bar) return '<div class="alert alert-warn">Bar non configurato</div>';
-    const vigiliTurno = this.members.filter(m => m.shift === sh);
-    const sel = this.members.find(m => m.id === this._saleSelected);
+    const vigiliTurno = this.active().filter(m => m.shift === sh);
+    const sel = this.active().find(m => m.id === this._saleSelected);
     const prodotti = this.products[sh] || [];
 
     return `
@@ -1512,10 +1595,10 @@ App.page_admin_magazzino = function() {
 App.page_admin_conti = function() {
     const sh = Auth.myShift();
     if (!sh) return '<div class="alert alert-warn">Turno non assegnato</div>';
-    const vigiliTurno = this.members.filter(m => m.shift === sh).sort((a,b) => a.name.localeCompare(b.name));
+    const vigiliTurno = this.active().filter(m => m.shift === sh).sort((a,b) => a.name.localeCompare(b.name));
 
     // Include anche eventuali debiti del Referente in questo bar
-    const refDebiti = this.members.filter(m => (m.balancePerBar||{})[sh] > 0 && m.shift !== sh);
+    const refDebiti = this.members.filter(m => (m.balancePerBar||{})[sh] > 0 && (m.shift !== sh || m.removed));
 
     const totale = vigiliTurno.reduce((s,m) => s + ((m.balancePerBar||{})[sh] || 0), 0)
                  + refDebiti.reduce((s,m) => s + ((m.balancePerBar||{})[sh] || 0), 0);
@@ -1554,7 +1637,7 @@ App.page_admin_conti = function() {
                 return `
                     <div class="item-row warn">
                         <div class="item-main">
-                            <div class="item-title">${escapeHtml(m.name)} <span class="chip chip-gray">${m.shift ? 'T'+m.shift : 'Referente'}</span></div>
+                            <div class="item-title">${escapeHtml(m.name)} <span class="chip chip-gray">${m.removed ? 'trasferito' : (m.shift ? 'T'+m.shift : 'Referente')}</span></div>
                         </div>
                         <strong class="color-orange">€${dbt.toFixed(2)}</strong>
                     </div>
@@ -2584,7 +2667,7 @@ App.modalExternal = function() {
     if (!sh) return;
     const prodotti = (this.products[sh] || []).filter(p => (p.stock||0) > 0);
     if (prodotti.length === 0) { alert('Nessun prodotto disponibile'); return; }
-    const vigiliTurno = this.members.filter(m => m.shift === sh).sort((a,b) => a.name.localeCompare(b.name));
+    const vigiliTurno = this.active().filter(m => m.shift === sh).sort((a,b) => a.name.localeCompare(b.name));
     // Referente può offrire
     const refMembers = this.members.filter(m => (this.users.find(u => u.uid === m.userId) || {}).role === 'referente');
     const offerentiOptions = [...vigiliTurno, ...refMembers];
@@ -2743,7 +2826,7 @@ App._refreshUsers = async function() {
 App.modalLinkUser = function(userUid, userName) {
     const u = this.users.find(x => x.uid === userUid);
     if (!u) return;
-    const available = this.members.filter(m => !m.userId && m.shift === u.shift);
+    const available = this.active().filter(m => !m.userId && m.shift === u.shift);
     modal(`🔗 Collega "${escapeHtml(u.name)}"`, `
         <div class="alert alert-info">Account <strong>${escapeHtml(u.name)}</strong> (${escapeHtml(u.email)}) · Turno ${u.shift || '?'}</div>
         <div class="text-sm text-gray mb-1">Scegli il vigile dell'elenco da collegare. Lo storico passa al nuovo account.</div>
